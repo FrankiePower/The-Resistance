@@ -60,7 +60,7 @@ const Keypair = await loadKeypairFactory();
 const NETWORK = 'testnet';
 const RPC_URL = 'https://soroban-testnet.stellar.org';
 const NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
-const EXISTING_GAME_HUB_TESTNET_CONTRACT_ID = 'CBRA7Z7RTHYGZVI7ZCW5OJLL6P7E53PQ5YOAM7CCDBKRELW72D4V4IM3';
+const EXISTING_GAME_HUB_TESTNET_CONTRACT_ID = 'CB4VZAT2U3UC6XFK3N23SKRF2NDCMP3QHJYMCHHFMZO7MRQO6DQ2EMYG';
 
 async function testnetAccountExists(address: string): Promise<boolean> {
   const res = await fetch(`https://horizon-testnet.stellar.org/accounts/${address}`, { method: 'GET' });

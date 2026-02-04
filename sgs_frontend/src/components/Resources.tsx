@@ -307,7 +307,7 @@ function CreateGameSection() {
           </p>
           <p>
             For testnet, <code>bun run deploy</code> will reuse the shared mock Game Hub contract
-            (<code>CBRA7Z7RTHYGZVI7ZCW5OJLL6P7E53PQ5YOAM7CCDBKRELW72D4V4IM3</code>) when it exists,
+            (<code>CB4VZAT2U3UC6XFK3N23SKRF2NDCMP3QHJYMCHHFMZO7MRQO6DQ2EMYG</code>) when it exists,
             or deploy a new mock if that contract is unavailable.
           </p>
           <div className="code-block">
