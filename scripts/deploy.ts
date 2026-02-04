@@ -8,13 +8,40 @@
  */
 
 import { $ } from "bun";
-import { Keypair } from '@stellar/stellar-sdk';
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEnvFile, getEnvValue } from './utils/env';
 import { getWorkspaceContracts, listContractNames, selectContracts } from "./utils/contracts";
+
+type StellarKeypair = {
+  publicKey(): string;
+  secret(): string;
+};
+
+type StellarKeypairFactory = {
+  random(): StellarKeypair;
+  fromSecret(secret: string): StellarKeypair;
+};
+
+async function loadKeypairFactory(): Promise<StellarKeypairFactory> {
+  try {
+    const sdk = await import("@stellar/stellar-sdk");
+    return sdk.Keypair;
+  } catch (error) {
+    console.warn("⚠️  @stellar/stellar-sdk is not installed. Running `bun install`...");
+    try {
+      await $`bun install`;
+      const sdk = await import("@stellar/stellar-sdk");
+      return sdk.Keypair;
+    } catch (installError) {
+      console.error("❌ Failed to load @stellar/stellar-sdk.");
+      console.error("Run `bun install` in the repository root, then retry.");
+      process.exit(1);
+    }
+  }
+}
 
 function usage() {
   console.log(`
@@ -28,6 +55,7 @@ Examples:
 }
 
 console.log("🚀 Deploying contracts to Stellar testnet...\n");
+const Keypair = await loadKeypairFactory();
 
 const NETWORK = 'testnet';
 const RPC_URL = 'https://soroban-testnet.stellar.org';

@@ -17,10 +17,24 @@ import { getWorkspaceContracts } from "./utils/contracts";
 
 console.log("🎮 Stellar Game Studio Setup\n");
 console.log("This will:");
+console.log("  0. Install JavaScript dependencies (if needed)");
 console.log("  1. Build Soroban contracts");
 console.log("  2. Deploy to Stellar testnet");
 console.log("  3. Generate TypeScript bindings");
 console.log("  4. Write local testnet configuration\n");
+
+// Step 0: Ensure JavaScript dependencies are installed
+if (!existsSync("node_modules/@stellar/stellar-sdk")) {
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("Step 0/4: Installing dependencies");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+  try {
+    await $`bun install`;
+  } catch (error) {
+    console.error("\n❌ Dependency installation failed. Please check the errors above.");
+    process.exit(1);
+  }
+}
 
 // Step 1: Build contracts
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
