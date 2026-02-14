@@ -1,0 +1,6 @@
+# Private inputs (secret bases)
+bases = ["10", "25", "50", "100", "150", "200", "250", "300", "350", "400"]
+
+# Public inputs
+bases_hash = "0x209cac26c87ff37391b96dea27ad5769651116a49e49ad9a3bcca2cde55b1673"
+target_star = "50"
