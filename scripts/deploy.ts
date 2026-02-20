@@ -300,8 +300,16 @@ for (const contract of contracts) {
     console.log(`  WASM hash: ${wasmHash}`);
 
     console.log("  Deploying and initializing...");
-    const deployResult =
-      await $`stellar contract deploy --wasm-hash ${wasmHash} --source-account ${adminSecret} --network ${NETWORK} -- --admin ${adminAddress} --game-hub ${mockGameHubId}`.text();
+    let deployResult: string;
+    if (contract.packageName === "the-resistance") {
+      // the-resistance requires vk_bytes for ZK verification
+      const vkPath = "circuits/target/vk";
+      deployResult =
+        await $`stellar contract deploy --wasm-hash ${wasmHash} --source-account ${adminSecret} --network ${NETWORK} -- --admin ${adminAddress} --game_hub ${mockGameHubId} --vk_bytes-file-path ${vkPath}`.text();
+    } else {
+      deployResult =
+        await $`stellar contract deploy --wasm-hash ${wasmHash} --source-account ${adminSecret} --network ${NETWORK} -- --admin ${adminAddress} --game_hub ${mockGameHubId}`.text();
+    }
     const contractId = deployResult.trim();
     deployed[contract.packageName] = contractId;
     console.log(`✅ ${contract.packageName} deployed: ${contractId}\n`);
