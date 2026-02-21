@@ -19,6 +19,7 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
   
   const status = useGameStore(state => state.starStates[star.id]) || 'unknown'
   const gamePhase = useGameStore(state => state.gamePhase)
+  const setClickedStarId = useGameStore(state => state.setClickedStarId)
 
   // Generate random planetary system
   const planets = [
@@ -71,7 +72,7 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
       ))}
 
       {/* UI Overlay */}
-      <Html position={[0, 15, 0]} center>
+      <Html position={[0, 6.5, 0]} center>
         <div className="bg-black/60 backdrop-blur-md p-5 rounded-2xl border border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] text-white w-[320px] flex flex-col gap-4 pointer-events-auto">
           
           {/* Header */}
@@ -93,7 +94,7 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
           </div>
 
           {/* Dynamic ZK Status Banner */}
-          {(gamePhase === 'playing' || status !== 'unknown') && (
+          {(gamePhase === 'playing' || status !== 'unknown') && status !== 'unknown' && (
             <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center ${bannerClass}`}>
               <div className="text-[10px] font-display font-bold uppercase tracking-[0.2em]">
                 {bannerTitle}
@@ -104,6 +105,19 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Manual Scan Action */}
+          {gamePhase === 'playing' && status === 'unknown' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setClickedStarId(star.id)
+              }}
+              className="mt-1 w-full bg-[rgba(253,218,36,0.15)] hover:bg-[rgba(253,218,36,0.25)] text-yellow-500 border border-[rgba(253,218,36,0.5)] font-display font-bold text-xs uppercase tracking-[0.2em] py-3.5 rounded-xl transition-all shadow-[0_0_15px_rgba(253,218,36,0.3)] hover:shadow-[0_0_20px_rgba(253,218,36,0.5)]"
+            >
+              Initialize ZK Scan
+            </button>
           )}
 
           {/* Planet Info (Hidden during scanning to focus on the result) */}

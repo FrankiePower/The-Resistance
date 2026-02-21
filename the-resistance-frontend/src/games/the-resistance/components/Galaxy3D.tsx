@@ -61,8 +61,8 @@ export function Galaxy3D() {
     // Animate camera to star
     const targetPosition = new THREE.Vector3(...star.position)
     
-    // Closer, more dynamic swoop angle
-    const offset = new THREE.Vector3(2, 2, 8)
+    // Zoom in smoothly, but back out enough to see the UI overlay floating above
+    const offset = new THREE.Vector3(0, 4, 18)
     const finalPosition = targetPosition.clone().add(offset)
 
     const startPosition = camera.position.clone()
@@ -221,12 +221,13 @@ function Star({ data, onClick }: StarProps) {
         ref={meshRef}
         onClick={(e) => {
           e.stopPropagation()
-          setClickedStarId(data.id)
           
           // Only trigger cinematic zoom during gameplay phases
           const gamePhase = useGameStore.getState().gamePhase;
           if (gamePhase === 'playing') {
             onClick()
+          } else {
+            setClickedStarId(data.id)
           }
         }}
         onPointerOver={(e) => {
