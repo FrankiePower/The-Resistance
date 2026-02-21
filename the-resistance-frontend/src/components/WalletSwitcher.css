@@ -15,7 +15,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.65rem 0.8rem 0.65rem 1rem;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(20, 20, 20, 0.8);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   box-shadow: var(--shadow-tight);
@@ -27,12 +27,12 @@
 }
 
 .wallet-status.connected {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(0, 167, 181, 0.05);
   border-color: rgba(0, 167, 181, 0.4);
 }
 
 .wallet-status.connecting {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(253, 218, 36, 0.05);
   border-color: rgba(253, 218, 36, 0.6);
 }
 
@@ -123,7 +123,7 @@
 }
 
 .wallet-error {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(20, 20, 20, 0.92);
   color: var(--color-error);
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md);

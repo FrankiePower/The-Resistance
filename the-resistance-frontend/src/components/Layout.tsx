@@ -5,6 +5,8 @@ import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Galaxy3D } from '../games/the-resistance/components/Galaxy3D';
 import { Loader3D } from '../games/the-resistance/components/Loader3D';
+import { useGameStore } from '../store/gameStore';
+import { Menu } from 'lucide-react';
 
 interface LayoutProps {
   title?: string;
@@ -13,8 +15,10 @@ interface LayoutProps {
 }
 
 export function Layout({ title, subtitle, children }: LayoutProps) {
-  const resolvedTitle = title || import.meta.env.VITE_GAME_TITLE || 'The Resistance';
-  const resolvedSubtitle = subtitle || import.meta.env.VITE_GAME_TAGLINE || 'Testnet dev sandbox';
+ 
+
+  const isSidebarOpen = useGameStore(state => state.isSidebarOpen);
+  const setIsSidebarOpen = useGameStore(state => state.setIsSidebarOpen);
 
   return (
     <div className="studio">
@@ -27,20 +31,26 @@ export function Layout({ title, subtitle, children }: LayoutProps) {
         <Loader3D />
       </div>
 
-      <header className="studio-header pointer-events-none">
-        <div className="brand pointer-events-auto bg-black/40 p-4 rounded-xl backdrop-blur-md">
-          <div className="brand-title">{resolvedTitle}</div>
-          <p className="brand-subtitle">{resolvedSubtitle}</p>
-        </div>
-        <div className="header-actions pointer-events-auto bg-black/40 p-2 rounded-xl backdrop-blur-md">
-          <div className="network-pill">Testnet</div>
-          <div className="network-pill dev-pill">Dev Wallets</div>
+      <header className="studio-header pointer-events-none flex justify-center">
+       
+        <div className="header-actions pointer-events-auto bg-black/40 p-2 rounded-xl backdrop-blur-md flex items-center">
+          {!isSidebarOpen && (
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="flex items-center gap-2 bg-gray-900/80 hover:bg-black text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-gray-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-md transition-all mr-2"
+            >
+              <Menu size={16} />
+              <span className="font-semibold text-xs md:text-sm tracking-wide hidden sm:inline-block">Command Center</span>
+            </button>
+          )}
+          <div className="network-pill hidden md:block">Testnet</div>
+          <div className="network-pill dev-pill hidden md:block">Dev Wallets</div>
           <WalletSwitcher />
         </div>
       </header>
 
-      <main className="studio-main pointer-events-none">
-        <div className="pointer-events-auto h-full">
+      <main className="pointer-events-none flex-1 w-full relative z-10 flex">
+        <div className="flex-1 relative w-full">
           {children}
         </div>
       </main>

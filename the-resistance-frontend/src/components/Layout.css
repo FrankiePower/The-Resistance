@@ -1,6 +1,7 @@
 .studio {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
   display: flex;
   flex-direction: column;
   color: var(--color-ink);
@@ -102,18 +103,19 @@
 .network-pill {
   padding: 0.4rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid var(--color-ink);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(20, 20, 20, 0.6);
+  color: var(--color-ink);
   font-family: var(--font-display);
 }
 
 .network-pill.dev-pill {
-  border-color: rgba(0, 167, 181, 0.6);
+  border-color: rgba(0, 167, 181, 0.4);
   background: rgba(0, 167, 181, 0.15);
-  color: var(--color-ink);
+  color: var(--color-teal);
 }
 
 .studio-main {

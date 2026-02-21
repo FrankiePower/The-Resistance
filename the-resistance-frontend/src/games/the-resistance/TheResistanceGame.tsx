@@ -7,6 +7,7 @@ import { BaseSelector } from './components/BaseSelector';
 import { ScanPanel } from './components/ScanPanel';
 import { hashBases } from './zkUtils';
 import { useGameStore, StarStatus } from '../../store/gameStore';
+import { Menu, X } from 'lucide-react';
 
 // Constants from contract
 const TOTAL_STARS = 200;
@@ -75,6 +76,8 @@ export function TheResistanceGame({
   const clickedStarId = useGameStore(state => state.clickedStarId);
   const setClickedStarId = useGameStore(state => state.setClickedStarId);
   const setAllStarStates = useGameStore(state => state.setAllStarStates);
+  const isSidebarOpen = useGameStore(state => state.isSidebarOpen);
+  const setIsSidebarOpen = useGameStore(state => state.setIsSidebarOpen);
 
   const isBusy = loading || scanningStarId !== null;
 
@@ -91,6 +94,15 @@ export function TheResistanceGame({
     });
     return scanned;
   }, [myScans]);
+
+  // Auto-hide sidebar during gameplay for immersion, but allow toggling
+  useEffect(() => {
+    if (gamePhase === 'playing') {
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(true);
+    }
+  }, [gamePhase]);
 
   // Timer effect
   useEffect(() => {
@@ -301,138 +313,151 @@ export function TheResistanceGame({
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <GameHeader
-        sessionId={sessionId}
-        gamePhase={gamePhase}
-        isMyTurn={isMyTurn}
-        myFoundCount={myFoundCount}
-        opponentFoundCount={opponentFoundCount}
-        basesPerPlayer={BASES_PER_PLAYER}
-        winner={winner}
-
-        userAddress={userAddress}
-        timeRemaining={timeRemaining}
-      />
-
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-2 rounded-lg mb-4">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-500/10 border border-green-500/50 text-green-500 px-4 py-2 rounded-lg mb-4">
-          {success}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Galaxy View is now handled by Layout.tsx (Canvas) */}
-        <div className="lg:col-span-3 pointer-events-none">
-           {/* Future invisible click handlers overlay or just transparent space so we can see the Canvas */}
+    <div className="absolute inset-y-0 left-0 h-full pointer-events-none flex">
+      
+      {/* Sidebar Panel */}
+      <div 
+        className={`pointer-events-auto h-full w-full sm:w-[26rem] bg-black/80 backdrop-blur-2xl border-r border-gray-700/80 shadow-[10px_0_30px_rgba(0,0,0,0.5)] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] z-40 origin-left
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full absolute'}
+        `}
+      >
+        {/* Header Controls */}
+        <div className="flex justify-between items-center p-5 border-b border-gray-700/50 bg-gray-900/40 shrink-0">
+          <h2 className="text-white font-serif font-semibold text-lg flex items-center gap-2">
+            <span className="text-blue-400">❖</span> Command Center
+          </h2>
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="text-gray-400 hover:text-white p-1 hover:bg-gray-800 rounded-lg transition-colors border-none bg-transparent"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        {/* Side Panel */}
-        <div className="lg:col-span-1">
-          {gamePhase === 'setup' && (
-            <BaseSelector
-              selectedCount={selectedBases.size}
-              maxBases={BASES_PER_PLAYER}
-              selectedBases={selectedBases}
-              onCommit={handleCommitBases}
-              loading={loading}
-            />
-          )}
-
-          {gamePhase === 'waiting' && (
-            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-              <h3 className="text-lg font-semibold text-white mb-2">Waiting for Opponent</h3>
-              <p className="text-gray-400 text-sm">
-                Share the session ID with your opponent to start the game.
-              </p>
-              <div className="mt-4 p-3 bg-gray-900/50 rounded font-mono text-sm text-gray-300">
-                Session: {sessionId}
-              </div>
-              {basesCommitment && (
-                <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-500 font-mono break-all">
-                  Commitment: {basesCommitment.slice(0, 16)}...
-                </div>
-              )}
-            </div>
-          )}
-
-          {gamePhase === 'playing' && (
-            <ScanPanel
+        {/* Scrollable Content Area */}
+        <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-5 flex-1 relative">
+            <GameHeader
+              sessionId={sessionId}
+              gamePhase={gamePhase}
               isMyTurn={isMyTurn}
-              scanningStarId={scanningStarId}
-              hoveredStar={hoveredStarId}
-              scannedStars={scannedStars}
-              recentScans={myScans.slice(-5).reverse()}
+              myFoundCount={myFoundCount}
+              opponentFoundCount={opponentFoundCount}
+              basesPerPlayer={BASES_PER_PLAYER}
+              winner={winner}
+              userAddress={userAddress}
+              timeRemaining={timeRemaining}
             />
-          )}
 
-          {gamePhase === 'complete' && (
-            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-              <h3 className="text-lg font-semibold text-white mb-2">
-                {winner === userAddress ? '🎉 Victory!' : '💀 Defeat'}
-              </h3>
-              <p className="text-gray-400 text-sm mb-4">
-                {winner === userAddress
-                  ? 'You found all enemy bases!'
-                  : 'The enemy found all your bases.'}
-              </p>
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Your hits:</span>
-                  <span className="text-emerald-400 font-bold">{myFoundCount}</span>
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-2 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-500/10 border border-green-500/50 text-green-500 px-4 py-2 rounded-lg">
+                {success}
+              </div>
+            )}
+
+            {gamePhase === 'setup' && (
+              <BaseSelector
+                selectedCount={selectedBases.size}
+                maxBases={BASES_PER_PLAYER}
+                selectedBases={selectedBases}
+                onCommit={handleCommitBases}
+                loading={loading}
+              />
+            )}
+
+            {gamePhase === 'waiting' && (
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                <h3 className="text-lg font-semibold text-white mb-2">Waiting for Opponent</h3>
+                <p className="text-gray-400 text-sm">
+                  Share the session ID with your opponent to start the game.
+                </p>
+                <div className="mt-4 p-3 bg-gray-900/50 rounded font-mono text-sm text-gray-300">
+                  Session: {sessionId}
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Enemy hits:</span>
-                  <span className="text-red-400 font-bold">{opponentFoundCount}</span>
+                {basesCommitment && (
+                  <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-500 font-mono break-all">
+                    Commitment: {basesCommitment.slice(0, 16)}...
+                  </div>
+                )}
+              </div>
+            )}
+
+            {gamePhase === 'playing' && (
+              <ScanPanel
+                isMyTurn={isMyTurn}
+                scanningStarId={scanningStarId}
+                hoveredStar={hoveredStarId}
+                scannedStars={scannedStars}
+                recentScans={myScans.slice(-5).reverse()}
+              />
+            )}
+
+            {gamePhase === 'complete' && (
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  {winner === userAddress ? '🎉 Victory!' : '💀 Defeat'}
+                </h3>
+                <p className="text-gray-400 text-sm mb-4">
+                  {winner === userAddress
+                    ? 'You found all enemy bases!'
+                    : 'The enemy found all your bases.'}
+                </p>
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Your hits:</span>
+                    <span className="text-emerald-400 font-bold">{myFoundCount}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Enemy hits:</span>
+                    <span className="text-red-400 font-bold">{opponentFoundCount}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Stars scanned:</span>
+                    <span className="text-gray-300">{myScans.length}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Stars scanned:</span>
-                  <span className="text-gray-300">{myScans.length}</span>
-                </div>
+                <button
+                  onClick={handleNewGame}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors border-none"
+                >
+                  New Game
+                </button>
+              </div>
+            )}
+          </div>
+
+        {/* Quick Start for Dev */}
+        {quickstartAvailable && gamePhase === 'setup' && (
+          <div className="pointer-events-auto mt-2 p-4 bg-yellow-500/10 border border-yellow-500/30 md:rounded-lg">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h4 className="text-yellow-400 font-semibold text-sm">Dev Mode</h4>
+                <p className="text-yellow-300/70 text-xs">
+                  Quickstart available for testing with dev wallets
+                </p>
               </div>
               <button
-                onClick={handleNewGame}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                onClick={() => {
+                  // Auto-select random bases for demo
+                  const randomBases = new Set<number>();
+                  while (randomBases.size < BASES_PER_PLAYER) {
+                    randomBases.add(Math.floor(Math.random() * TOTAL_STARS));
+                  }
+                  setSelectedBases(randomBases);
+                }}
+                className="w-full py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition-colors text-sm border-none"
               >
-                New Game
+                Random Bases
               </button>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Quick Start for Dev */}
-      {quickstartAvailable && gamePhase === 'setup' && (
-        <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-yellow-400 font-semibold">Dev Mode</h4>
-              <p className="text-yellow-300/70 text-sm">
-                Quickstart available for testing with dev wallets
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                // Auto-select random bases for demo
-                const randomBases = new Set<number>();
-                while (randomBases.size < BASES_PER_PLAYER) {
-                  randomBases.add(Math.floor(Math.random() * TOTAL_STARS));
-                }
-                setSelectedBases(randomBases);
-              }}
-              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition-colors"
-            >
-              Random Bases
-            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
