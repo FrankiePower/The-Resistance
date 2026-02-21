@@ -187,7 +187,7 @@ export function TheResistanceGame({
       // Simulate opponent joining (remove in production)
       setTimeout(() => {
         setGamePhase('playing');
-        setTimeRemaining(300); // Reset timer
+        setTimeRemaining(600); // Reset timer to 10 minutes
         setIsMyTurn(true);
         setSuccess('Game started! Your turn to scan.');
       }, 2000);
