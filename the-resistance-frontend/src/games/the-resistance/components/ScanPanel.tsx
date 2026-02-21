@@ -53,7 +53,7 @@ export function ScanPanel({
               }`}
             >
               <div className={`text-base mb-1 ${selectedAction === 0 ? 'text-[var(--color-teal)] drop-shadow-[0_0_5px_rgba(0,167,181,0.5)]' : 'text-gray-500'}`}>🎯</div>
-              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 0 ? 'text-[var(--color-teal)]' : 'text-gray-500'}`}>Strike</div>
+              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 0 ? 'text-[var(--color-teal)]' : 'text-gray-500'}`}>Solar Scan</div>
             </button>
             
             <button
@@ -83,7 +83,7 @@ export function ScanPanel({
           
           <div className="bg-black/30 mt-1 rounded-lg p-2.5 border border-gray-800">
             {selectedAction === 0 && (
-              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-[var(--color-teal)] font-bold">BASE STRIKE:</span> A standard precision attack on a single star coordinate. Pinpoint accuracy.</p>
+              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-[var(--color-teal)] font-bold">SOLAR SCAN:</span> A standard precision attack on a single star coordinate. Pinpoint accuracy.</p>
             )}
             {selectedAction === 1 && (
               <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-yellow-500 font-bold">DEEP RADAR:</span> Scans a 3x3 sector around the target. Reveals the total number of enemy signatures nearby.</p>

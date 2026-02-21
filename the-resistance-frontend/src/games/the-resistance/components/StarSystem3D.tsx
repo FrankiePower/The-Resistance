@@ -117,7 +117,7 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
               }}
               className="mt-1 w-full bg-[rgba(253,218,36,0.15)] hover:bg-[rgba(253,218,36,0.25)] text-yellow-500 border border-[rgba(253,218,36,0.5)] font-display font-bold text-xs uppercase tracking-[0.2em] py-3.5 rounded-xl transition-all shadow-[0_0_15px_rgba(253,218,36,0.3)] hover:shadow-[0_0_20px_rgba(253,218,36,0.5)]"
             >
-              Initialize ZK Scan
+              Execute Solar Scan
             </button>
           )}
 
