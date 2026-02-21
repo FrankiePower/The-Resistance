@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { Html } from "@react-three/drei"
 import { useGameStore } from "../../../store/gameStore"
+import { getTriviaForStar } from "../../data/spaceTrivia"
 
 interface StarSystemProps {
   star: {
@@ -120,16 +121,16 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
             </button>
           )}
 
-          {/* Planet Info (Hidden during scanning to focus on the result) */}
+          {/* Trivia Info (Hidden during scanning to focus on the result) */}
           {status !== 'scanning' && (
             <div className="space-y-2 bg-black/40 rounded-xl p-3 border border-gray-800/80">
-              <div className="text-[9px] uppercase tracking-[0.2em] font-semibold text-[var(--color-ink-muted)] mb-2 px-1">Planetary Bodies</div>
-              {planets.map((planet, i) => (
-                <div key={i} className="text-xs flex justify-between items-center px-1">
-                  <span className="font-mono text-[var(--color-ink)]">{planet.name}</span>
-                  <span className="font-mono text-xs text-[var(--color-ink-muted)]">{planet.moons} moon{planet.moons !== 1 && 's'}</span>
-                </div>
-              ))}
+              <div className="text-[9px] uppercase tracking-[0.2em] font-semibold text-[var(--color-ink-muted)] mb-2 px-1 flex items-center gap-1.5">
+                <span className="text-[var(--color-teal)] opacity-70 mt-0.5">❖</span>
+                Astrophysics Log
+              </div>
+              <p className="text-xs text-[var(--color-ink-muted)] leading-relaxed px-1 font-sans tracking-wide">
+                {getTriviaForStar(star.id)}
+              </p>
             </div>
           )}
 
