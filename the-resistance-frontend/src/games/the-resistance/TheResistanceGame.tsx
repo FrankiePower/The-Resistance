@@ -32,6 +32,8 @@ export interface ScanResult {
   starId: number;
   isBase: boolean;
   timestamp: number;
+  actionType?: ActionType;
+  countFound?: number;
 }
 
 export type ActionType = 0 | 1 | 2; // 0: Strike, 1: Radar, 2: Orbital
@@ -70,10 +72,6 @@ export function TheResistanceGame({
   const [scanningStarId, setScanningStarId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  // New: Arsenal Actions
-  const [selectedAction, setSelectedAction] = useState<ActionType>(0);
-  
-  // Store integration
   const hoveredStarId = useGameStore(state => state.hoveredStarId);
   const clickedStarId = useGameStore(state => state.clickedStarId);
   const setClickedStarId = useGameStore(state => state.setClickedStarId);
@@ -84,6 +82,8 @@ export function TheResistanceGame({
   const setGamePhase = useGameStore(state => state.setGamePhase);
   const timeRemaining = useGameStore(state => state.timeRemaining);
   const setTimeRemaining = useGameStore(state => state.setTimeRemaining);
+  const selectedAction = useGameStore(state => state.selectedAction);
+  const setSelectedAction = useGameStore(state => state.setSelectedAction);
 
   const isBusy = loading || scanningStarId !== null;
 
@@ -96,7 +96,10 @@ export function TheResistanceGame({
   const scannedStars = useMemo(() => {
     const scanned = new Map<number, 'hit' | 'miss'>();
     myScans.forEach(scan => {
-      scanned.set(scan.starId, scan.isBase ? 'hit' : 'miss');
+      // Only precision strikes change the color of the star
+      if (scan.actionType === 0 || scan.actionType === undefined) {
+        scanned.set(scan.starId, scan.isBase ? 'hit' : 'miss');
+      }
     });
     return scanned;
   }, [myScans]);
@@ -222,16 +225,26 @@ export function TheResistanceGame({
       // TODO: Submit scan to contract
       // For now, simulate random result
       const isBase = Math.random() < 0.05; // 5% chance (10 bases / 200 stars)
+      
+      // If Radar, simulate finding a few signatures around
+      let countFound = 0;
+      if (selectedAction === 1) {
+        countFound = Math.floor(Math.random() * 4); // 0 to 3 signatures
+      }
 
       const result: ScanResult = {
         starId,
         isBase,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        actionType: selectedAction,
+        countFound
       };
 
       setMyScans(prev => [...prev, result]);
 
-      if (isBase) {
+      if (selectedAction === 1) {
+        setSuccess(`[RADAR LOG] Scan complete at Star ${starId}. Detected ${countFound} enemy signatures in local proximity.`);
+      } else if (isBase) {
         const newCount = myFoundCount + 1;
         setMyFoundCount(newCount);
         setSuccess(`HIT! Found enemy base at Star ${starId}! (${newCount}/${BASES_PER_PLAYER})`);

@@ -192,6 +192,7 @@ function Star({ data, onClick }: StarProps) {
   const setHoveredStarId = useGameStore(state => state.setHoveredStarId)
   const setClickedStarId = useGameStore(state => state.setClickedStarId)
   const hoveredStarId = useGameStore(state => state.hoveredStarId)
+  const selectedAction = useGameStore(state => state.selectedAction)
   
   const hovered = hoveredStarId === data.id
 
@@ -205,6 +206,8 @@ function Star({ data, onClick }: StarProps) {
     return data.color // Default color for available/unknown
   }, [status, data.color])
 
+  const radarRef = useRef<THREE.Mesh>(null)
+
   useFrame((state) => {
     if (meshRef.current) {
       // Pulsing effect based on status
@@ -212,6 +215,14 @@ function Star({ data, onClick }: StarProps) {
       const scaleBase = status === 'hit' ? 0.8 : status === 'scanning' ? 1.5 : 1;
       const scale = scaleBase + Math.sin(state.clock.elapsedTime * pulseSpeed + data.id) * 0.2
       meshRef.current.scale.setScalar(scale)
+    }
+
+    // Radar expansion effect: continuously expand while scanning
+    if (radarRef.current && status === 'scanning' && selectedAction === 1) {
+      const time = state.clock.elapsedTime % 1.5;
+      const progress = time / 1.5; 
+      radarRef.current.scale.setScalar(progress * 25 + 1); // Expand to 25x size (radius)
+      (radarRef.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (1 - progress) * 0.6);
     }
   })
 
@@ -222,10 +233,15 @@ function Star({ data, onClick }: StarProps) {
         onClick={(e) => {
           e.stopPropagation()
           
-          // Only trigger cinematic zoom during gameplay phases
+          // Only trigger cinematic zoom for Solar Scan (0)
           const gamePhase = useGameStore.getState().gamePhase;
+          const currentAction = useGameStore.getState().selectedAction;
           if (gamePhase === 'playing') {
-            onClick()
+            if (currentAction === 0) {
+              onClick() // Zoom into system
+            } else {
+              setClickedStarId(data.id) // Instantly scan (Radar / Arm Strike)
+            }
           } else {
             setClickedStarId(data.id)
           }
@@ -255,6 +271,14 @@ function Star({ data, onClick }: StarProps) {
         <mesh position={[0, data.size + 0.5, 0]} scale={hovered ? 0.3 : 0.2}>
           <ringGeometry args={[0.3, 0.4, 16]} />
           <meshBasicMaterial color="#00ffff" transparent opacity={0.6} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+
+      {/* Radar Dome Effect */}
+      {status === 'scanning' && selectedAction === 1 && (
+        <mesh ref={radarRef}>
+          <sphereGeometry args={[data.size * 2, 32, 32]} />
+          <meshBasicMaterial color="#00ff00" transparent opacity={0.5} wireframe />
         </mesh>
       )}
     </group>
