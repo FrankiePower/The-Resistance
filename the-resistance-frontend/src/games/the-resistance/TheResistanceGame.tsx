@@ -54,7 +54,6 @@ export function TheResistanceGame({
 
   // Game state
   const [sessionId, setSessionId] = useState<number>(() => initialSessionId || createRandomSessionId());
-  const [gamePhase, setGamePhase] = useState<GamePhase>('setup');
   const [selectedBases, setSelectedBases] = useState<Set<number>>(new Set());
   const [basesCommitment, setBasesCommitment] = useState<string | null>(null);
   const [myScans, setMyScans] = useState<ScanResult[]>([]);
@@ -63,7 +62,6 @@ export function TheResistanceGame({
   const [opponentFoundCount, setOpponentFoundCount] = useState(0);
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState(300); // 5 minutes in seconds
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -78,6 +76,10 @@ export function TheResistanceGame({
   const setAllStarStates = useGameStore(state => state.setAllStarStates);
   const isSidebarOpen = useGameStore(state => state.isSidebarOpen);
   const setIsSidebarOpen = useGameStore(state => state.setIsSidebarOpen);
+  const gamePhase = useGameStore(state => state.gamePhase);
+  const setGamePhase = useGameStore(state => state.setGamePhase);
+  const timeRemaining = useGameStore(state => state.timeRemaining);
+  const setTimeRemaining = useGameStore(state => state.setTimeRemaining);
 
   const isBusy = loading || scanningStarId !== null;
 
@@ -102,17 +104,24 @@ export function TheResistanceGame({
     } else {
       setIsSidebarOpen(true);
     }
-  }, [gamePhase]);
+  }, [gamePhase, setIsSidebarOpen]);
+
+  // Auto-pop the sidebar back open during setup once 10 bases are picked
+  useEffect(() => {
+    if (gamePhase === 'setup' && selectedBases.size === BASES_PER_PLAYER) {
+      setIsSidebarOpen(true);
+    }
+  }, [selectedBases.size, gamePhase, setIsSidebarOpen]);
 
   // Timer effect
   useEffect(() => {
     if (gamePhase === 'playing' && timeRemaining > 0 && !winner) {
       const timer = setInterval(() => {
-        setTimeRemaining(prev => Math.max(0, prev - 1));
+        setTimeRemaining(timeRemaining - 1);
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [gamePhase, timeRemaining, winner]);
+  }, [gamePhase, timeRemaining, winner, setTimeRemaining]);
 
   // Sync star states to store for 3D UI
   useEffect(() => {

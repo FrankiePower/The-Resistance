@@ -7,12 +7,16 @@ interface GameState {
   clickedStarId: number | null; 
   starStates: Record<number, StarStatus>;
   isSidebarOpen: boolean;
+  gamePhase: 'setup' | 'waiting' | 'playing' | 'complete';
+  timeRemaining: number;
   
   setHoveredStarId: (id: number | null) => void;
   setClickedStarId: (id: number | null) => void;
   setStarState: (id: number, status: StarStatus) => void;
   setAllStarStates: (states: Record<number, StarStatus>) => void;
   setIsSidebarOpen: (isOpen: boolean) => void;
+  setGamePhase: (phase: 'setup' | 'waiting' | 'playing' | 'complete') => void;
+  setTimeRemaining: (time: number) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -20,6 +24,8 @@ export const useGameStore = create<GameState>((set) => ({
   clickedStarId: null,
   starStates: {},
   isSidebarOpen: true,
+  gamePhase: 'setup',
+  timeRemaining: 300,
   
   setHoveredStarId: (id) => set({ hoveredStarId: id }),
   setClickedStarId: (id) => set({ clickedStarId: id }),
@@ -28,4 +34,6 @@ export const useGameStore = create<GameState>((set) => ({
   })),
   setAllStarStates: (states) => set({ starStates: states }),
   setIsSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
+  setGamePhase: (phase) => set({ gamePhase: phase }),
+  setTimeRemaining: (time) => set({ timeRemaining: time }),
 }));
