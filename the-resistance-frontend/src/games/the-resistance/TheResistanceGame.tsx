@@ -433,7 +433,7 @@ export function TheResistanceGame({
 
         {/* Quick Start for Dev */}
         {quickstartAvailable && gamePhase === 'setup' && (
-          <div className="pointer-events-auto mt-2 p-4 bg-yellow-500/10 border border-yellow-500/30 md:rounded-lg">
+          <div className="pointer-events-auto p-5 border-t border-gray-700/50 bg-black/40 shrink-0">
             <div className="flex flex-col gap-3">
               <div>
                 <h4 className="text-yellow-400 font-semibold text-sm">Dev Mode</h4>
@@ -450,7 +450,7 @@ export function TheResistanceGame({
                   }
                   setSelectedBases(randomBases);
                 }}
-                className="w-full py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition-colors text-sm border-none"
+                className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-400 text-black font-semibold rounded-lg transition-colors text-sm border-none shadow-[0_0_15px_rgba(253,218,36,0.3)]"
               >
                 Random Bases
               </button>
