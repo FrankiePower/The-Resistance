@@ -1,4 +1,5 @@
-import type { ScanResult } from '../TheResistanceGame';
+import { useState } from 'react';
+import type { ScanResult, ActionType } from '../TheResistanceGame';
 
 interface ScanPanelProps {
   isMyTurn: boolean;
@@ -6,6 +7,8 @@ interface ScanPanelProps {
   hoveredStar: number | null;
   scannedStars: Map<number, 'hit' | 'miss'>;
   recentScans: ScanResult[];
+  selectedAction: ActionType;
+  onActionSelect: (action: ActionType) => void;
 }
 
 export function ScanPanel({
@@ -13,7 +16,9 @@ export function ScanPanel({
   scanningStarId,
   hoveredStar,
   scannedStars,
-  recentScans
+  recentScans,
+  selectedAction,
+  onActionSelect
 }: ScanPanelProps) {
   return (
     <div className="bg-[rgba(0,167,181,0.05)] rounded-2xl p-6 border border-[rgba(0,167,181,0.3)] shadow-[0_0_20px_rgba(0,167,181,0.1)] flex flex-col gap-5">
@@ -29,10 +34,66 @@ export function ScanPanel({
         </div>
         {isMyTurn && !scanningStarId && (
           <p className="text-xs text-[var(--color-ink-muted)] mt-2 font-medium">
-            Click a star to scan for enemy bases
+            Select a command and click a star coordinate
           </p>
         )}
       </div>
+
+      {/* Arsenal Commands Box */}
+      {isMyTurn && !scanningStarId && (
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] uppercase tracking-[0.2em] font-display font-semibold text-[var(--color-ink-muted)] ml-1">Command Arsenal</label>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => onActionSelect(0)}
+              className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${
+                selectedAction === 0
+                  ? 'bg-[var(--color-teal)]/10 border-[var(--color-teal)]/50 shadow-[0_0_10px_rgba(0,167,181,0.2)]'
+                  : 'bg-black/30 border-gray-800 hover:border-gray-600'
+              }`}
+            >
+              <div className={`text-base mb-1 ${selectedAction === 0 ? 'text-[var(--color-teal)] drop-shadow-[0_0_5px_rgba(0,167,181,0.5)]' : 'text-gray-500'}`}>🎯</div>
+              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 0 ? 'text-[var(--color-teal)]' : 'text-gray-500'}`}>Strike</div>
+            </button>
+            
+            <button
+              onClick={() => onActionSelect(1)}
+              className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${
+                selectedAction === 1
+                  ? 'bg-yellow-500/10 border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]'
+                  : 'bg-black/30 border-gray-800 hover:border-gray-600'
+              }`}
+            >
+              <div className={`text-base mb-1 ${selectedAction === 1 ? 'text-yellow-400 drop-shadow-[0_0_5px_rgba(234,179,8,0.5)]' : 'text-gray-500'}`}>📡</div>
+              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 1 ? 'text-yellow-500' : 'text-gray-500'}`}>Radar</div>
+            </button>
+
+            <button
+              onClick={() => onActionSelect(2)}
+              className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${
+                selectedAction === 2
+                  ? 'bg-red-500/10 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]'
+                  : 'bg-black/30 border-gray-800 hover:border-gray-600'
+              }`}
+            >
+              <div className={`text-base mb-1 ${selectedAction === 2 ? 'text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'text-gray-500'}`}>☄️</div>
+              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 2 ? 'text-red-500' : 'text-gray-500'}`}>Orbital</div>
+            </button>
+          </div>
+          
+          <div className="bg-black/30 mt-1 rounded-lg p-2.5 border border-gray-800">
+            {selectedAction === 0 && (
+              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-[var(--color-teal)] font-bold">BASE STRIKE:</span> A standard precision attack on a single star coordinate. Pinpoint accuracy.</p>
+            )}
+            {selectedAction === 1 && (
+              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-yellow-500 font-bold">DEEP RADAR:</span> Scans a 3x3 sector around the target. Reveals the total number of enemy signatures nearby.</p>
+            )}
+            {selectedAction === 2 && (
+              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-red-500 font-bold">ORBITAL COLUMN:</span> Devastating vertical blast. Incinerates the entire target X-coordinate column from top to bottom.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Scanning indicator */}
       {scanningStarId !== null && (

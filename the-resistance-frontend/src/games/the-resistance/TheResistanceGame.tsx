@@ -34,6 +34,8 @@ export interface ScanResult {
   timestamp: number;
 }
 
+export type ActionType = 0 | 1 | 2; // 0: Strike, 1: Radar, 2: Orbital
+
 interface TheResistanceGameProps {
   userAddress: string;
   currentEpoch: number;
@@ -68,6 +70,8 @@ export function TheResistanceGame({
   const [scanningStarId, setScanningStarId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // New: Arsenal Actions
+  const [selectedAction, setSelectedAction] = useState<ActionType>(0);
   
   // Store integration
   const hoveredStarId = useGameStore(state => state.hoveredStarId);
@@ -403,6 +407,8 @@ export function TheResistanceGame({
                 hoveredStar={hoveredStarId}
                 scannedStars={scannedStars}
                 recentScans={myScans.slice(-5).reverse()}
+                selectedAction={selectedAction}
+                onActionSelect={setSelectedAction}
               />
             )}
 
