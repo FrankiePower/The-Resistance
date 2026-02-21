@@ -34,7 +34,7 @@ export function Layout({ title, subtitle, children }: LayoutProps) {
 
       <header className="studio-header pointer-events-none flex justify-end relative w-full">
         {(gamePhase === 'playing' || gamePhase === 'complete') && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-0 pointer-events-auto bg-black/60 backdrop-blur-xl rounded-b-2xl border border-t-0 border-[rgba(0,167,181,0.3)] shadow-[0_0_20px_rgba(0,167,181,0.15)] px-8 py-3 flex flex-col items-center justify-center z-50">
+          <div className="absolute left-[2.5rem] top-0 pointer-events-auto bg-black/60 backdrop-blur-xl rounded-b-2xl border border-t-0 border-[rgba(0,167,181,0.3)] shadow-[0_0_20px_rgba(0,167,181,0.15)] px-8 py-3 flex flex-col items-center justify-center z-50">
             <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--color-ink-muted)] font-display font-semibold mb-1">Time Remaining</span>
             <span className={`text-3xl font-mono font-bold tracking-widest ${timeRemaining < 60 ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]' : 'text-[var(--color-ink)] drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]'}`}>
               {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
