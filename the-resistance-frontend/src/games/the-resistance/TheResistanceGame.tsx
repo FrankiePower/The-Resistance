@@ -6,6 +6,7 @@ import { GameHeader } from './components/GameHeader';
 import { BaseSelector } from './components/BaseSelector';
 import { ScanPanel } from './components/ScanPanel';
 import { hashBases } from './zkUtils';
+import { useGameStore, StarStatus } from '../../store/gameStore';
 
 // Constants from contract
 const TOTAL_STARS = 200;
@@ -68,7 +69,12 @@ export function TheResistanceGame({
   const [scanningStarId, setScanningStarId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [hoveredStar, setHoveredStar] = useState<number | null>(null);
+  
+  // Store integration
+  const hoveredStarId = useGameStore(state => state.hoveredStarId);
+  const clickedStarId = useGameStore(state => state.clickedStarId);
+  const setClickedStarId = useGameStore(state => state.setClickedStarId);
+  const setAllStarStates = useGameStore(state => state.setAllStarStates);
 
   const isBusy = loading || scanningStarId !== null;
 
@@ -95,6 +101,31 @@ export function TheResistanceGame({
       return () => clearInterval(timer);
     }
   }, [gamePhase, timeRemaining, winner]);
+
+  // Sync star states to store for 3D UI
+  useEffect(() => {
+    const states: Record<number, StarStatus> = {};
+    for (let i = 0; i < TOTAL_STARS; i++) {
+      if (scanningStarId === i) {
+        states[i] = 'scanning';
+        continue;
+      }
+      if (gamePhase === 'setup') {
+        states[i] = selectedBases.has(i) ? 'base' : 'available';
+        continue;
+      }
+      if (scannedStars.has(i)) {
+        states[i] = scannedStars.get(i)!;
+        continue;
+      }
+      if (opponentScans.includes(i)) {
+        states[i] = 'opponent-scanned';
+        continue;
+      }
+      states[i] = 'unknown';
+    }
+    setAllStarStates(states);
+  }, [gamePhase, selectedBases, scannedStars, opponentScans, scanningStarId, setAllStarStates]);
 
   // Handle base selection
   const handleToggleBase = useCallback((starId: number) => {
@@ -205,6 +236,19 @@ export function TheResistanceGame({
     }
   };
 
+  // Listen to 3D clicks from Zustand store
+  useEffect(() => {
+    if (clickedStarId !== null) {
+      if (gamePhase === 'setup') {
+        handleToggleBase(clickedStarId);
+      } else if (gamePhase === 'playing') {
+        handleScanStar(clickedStarId);
+      }
+      // Immediately reset so we can click again
+      setClickedStarId(null);
+    }
+  }, [clickedStarId, gamePhase, handleToggleBase, handleScanStar, setClickedStarId]);
+
   // Simulate opponent turn (for demo purposes)
   const simulateOpponentTurn = useCallback(() => {
     // Pick a random star that hasn't been scanned
@@ -284,19 +328,9 @@ export function TheResistanceGame({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Galaxy View */}
-        <div className="lg:col-span-3">
-          <GalaxyGrid
-            totalStars={TOTAL_STARS}
-            selectedBases={selectedBases}
-            scannedStars={scannedStars}
-            opponentScans={opponentScans}
-            hoveredStar={hoveredStar}
-            scanningStarId={scanningStarId}
-            gamePhase={gamePhase}
-            onStarClick={gamePhase === 'setup' ? handleToggleBase : handleScanStar}
-            onStarHover={setHoveredStar}
-          />
+        {/* Main Galaxy View is now handled by Layout.tsx (Canvas) */}
+        <div className="lg:col-span-3 pointer-events-none">
+           {/* Future invisible click handlers overlay or just transparent space so we can see the Canvas */}
         </div>
 
         {/* Side Panel */}
@@ -332,7 +366,7 @@ export function TheResistanceGame({
             <ScanPanel
               isMyTurn={isMyTurn}
               scanningStarId={scanningStarId}
-              hoveredStar={hoveredStar}
+              hoveredStar={hoveredStarId}
               scannedStars={scannedStars}
               recentScans={myScans.slice(-5).reverse()}
             />
