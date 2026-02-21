@@ -53,29 +53,33 @@ export function Galaxy3D() {
   }, [])
 
   const handleStarClick = (star: StarData) => {
-    if (!star.hasSystem || isZooming) return
+    if (isZooming) return
 
     setIsZooming(true)
     setSelectedStar(star)
 
     // Animate camera to star
     const targetPosition = new THREE.Vector3(...star.position)
-    const offset = new THREE.Vector3(0, 5, 15)
+    
+    // Closer, more dynamic swoop angle
+    const offset = new THREE.Vector3(2, 2, 8)
     const finalPosition = targetPosition.clone().add(offset)
 
     const startPosition = camera.position.clone()
     const startTarget = controlsRef.current?.target.clone() || new THREE.Vector3(0, 0, 0)
 
     let progress = 0
-    const duration = 2000
+    const duration = 1500 // Faster, snappier swoop
     const startTime = Date.now()
 
     const animate = () => {
       const elapsed = Date.now() - startTime
       progress = Math.min(elapsed / duration, 1)
 
-      // Easing function
-      const eased = 1 - Math.pow(1 - progress, 3)
+      // Epic easeInOutQuint easing curve
+      const eased = progress < 0.5 
+        ? 16 * progress * progress * progress * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 5) / 2;
 
       camera.position.lerpVectors(startPosition, finalPosition, eased)
 
@@ -218,8 +222,12 @@ function Star({ data, onClick }: StarProps) {
         onClick={(e) => {
           e.stopPropagation()
           setClickedStarId(data.id)
-          // We can optionally fly the camera if it's not a strike:
-          // if (data.hasSystem && status === 'unknown') onClick() 
+          
+          // Only trigger cinematic zoom during gameplay phases
+          const gamePhase = useGameStore.getState().gamePhase;
+          if (gamePhase === 'playing') {
+            onClick()
+          }
         }}
         onPointerOver={(e) => {
           e.stopPropagation()
@@ -244,7 +252,7 @@ function Star({ data, onClick }: StarProps) {
       {/* Indicator for systems with planets */}
       {data.hasSystem && (
         <mesh position={[0, data.size + 0.5, 0]} scale={hovered ? 0.3 : 0.2}>
-          <ringGeometry args={[0.5, 0.7, 16]} />
+          <ringGeometry args={[0.3, 0.4, 16]} />
           <meshBasicMaterial color="#00ffff" transparent opacity={0.6} side={THREE.DoubleSide} />
         </mesh>
       )}
