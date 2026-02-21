@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { Html } from "@react-three/drei"
 import { useGameStore } from "../../../store/gameStore"
-import { getTriviaForStar } from "../../data/spaceTrivia"
+import { getTriviaForStar } from "../data/spaceTrivia"
 
 interface StarSystemProps {
   star: {
