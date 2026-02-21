@@ -66,16 +66,16 @@ export function ScanPanel({
               }`}
             >
               <div className={`text-base mb-1 ${selectedAction === 2 ? 'text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'text-gray-500'}`}>☄️</div>
-              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 2 ? 'text-red-500' : 'text-gray-500'}`}>Orbital</div>
+              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 2 ? 'text-red-500' : 'text-gray-500'}`}>Arm Strike</div>
             </button>
           </div>
           
           <div className="bg-black/30 mt-1 rounded-lg p-2.5 border border-gray-800">
             {selectedAction === 1 && (
-              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-yellow-500 font-bold">DEEP RADAR:</span> Scans a 3x3 sector around the target. Reveals the total number of enemy signatures nearby.</p>
+              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-yellow-500 font-bold">DEEP RADAR:</span> Scans the deep space sector. Reveals the total number of enemy signatures within a localized lightyear radius around the target.</p>
             )}
             {selectedAction === 2 && (
-              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-red-500 font-bold">ORBITAL COLUMN:</span> Devastating vertical blast. Incinerates the entire target X-coordinate column from top to bottom.</p>
+              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-red-500 font-bold">GALACTIC ARM STRIKE:</span> Devastating cosmic blast. Incinerates all stars along the entire spiral arm of the selected target.</p>
             )}
           </div>
         </div>
