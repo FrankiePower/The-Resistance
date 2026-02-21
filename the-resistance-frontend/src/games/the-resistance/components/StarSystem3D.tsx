@@ -72,8 +72,8 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
       ))}
 
       {/* UI Overlay */}
-      <Html position={[0, 6.5, 0]} center>
-        <div className="bg-black/60 backdrop-blur-md p-5 rounded-2xl border border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] text-white w-[320px] flex flex-col gap-4 pointer-events-auto">
+      <Html fullscreen zIndexRange={[100, 0]}>
+        <div className="absolute right-10 top-1/2 -translate-y-1/2 bg-black/60 backdrop-blur-md p-5 rounded-2xl border border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] text-white w-[320px] flex flex-col gap-4 pointer-events-auto">
           
           {/* Header */}
           <div className="flex justify-between items-start border-b border-gray-800 pb-3">
