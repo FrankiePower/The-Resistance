@@ -2,6 +2,7 @@ import { useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { Html } from "@react-three/drei"
+import { useGameStore } from "../../../store/gameStore"
 
 interface StarSystemProps {
   star: {
@@ -15,6 +16,9 @@ interface StarSystemProps {
 
 export function StarSystem3D({ star, onBack }: StarSystemProps) {
   const groupRef = useRef<THREE.Group>(null)
+  
+  const status = useGameStore(state => state.starStates[star.id]) || 'unknown'
+  const gamePhase = useGameStore(state => state.gamePhase)
 
   // Generate random planetary system
   const planets = [
@@ -23,6 +27,29 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
     { distance: 8, size: 0.8, color: "#FF8C00", speed: 0.5, name: "Gas-C", moons: 3 },
     { distance: 12, size: 0.6, color: "#9370DB", speed: 0.3, name: "Ice-D", moons: 2 },
   ]
+
+  // Determine UI State
+  let bannerClass = "bg-[rgba(0,167,181,0.1)] border-[rgba(0,167,181,0.3)] text-[var(--color-teal)] shadow-[0_0_15px_rgba(0,167,181,0.2)]";
+  let bannerTitle = "SYSTEM INFO";
+  let bannerDesc = "Standard encyclopedia read";
+
+  if (status === 'scanning') {
+    bannerClass = "bg-[rgba(253,218,36,0.1)] border-[rgba(253,218,36,0.4)] text-yellow-500 shadow-[0_0_15px_rgba(253,218,36,0.2)]";
+    bannerTitle = "SCANNING";
+    bannerDesc = "Generating ZK Proof...";
+  } else if (status === 'hit') {
+    bannerClass = "bg-[rgba(248,113,113,0.15)] border-red-500/50 text-red-500 shadow-[0_0_15px_rgba(248,113,113,0.3)]";
+    bannerTitle = "HIT MATCH";
+    bannerDesc = "Enemy Fleet Base Detected!";
+  } else if (status === 'miss') {
+    bannerClass = "bg-gray-800/40 border-gray-600/50 text-gray-400 shadow-[0_0_15px_rgba(0,0,0,0.5)]";
+    bannerTitle = "MISS";
+    bannerDesc = "No enemy presence found.";
+  } else if (status === 'base') {
+    bannerClass = "bg-[rgba(16,185,129,0.15)] border-emerald-500/50 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+    bannerTitle = "YOUR BASE";
+    bannerDesc = "Friendly fleet sector";
+  }
 
   return (
     <group ref={groupRef} position={star.position}>
@@ -45,27 +72,62 @@ export function StarSystem3D({ star, onBack }: StarSystemProps) {
 
       {/* UI Overlay */}
       <Html position={[0, 15, 0]} center>
-        <div className="bg-black/80 backdrop-blur-md p-4 rounded-lg text-white font-mono min-w-[300px]">
-          <h2 className="text-lg font-bold mb-2">Star System #{star.id}</h2>
-          <p className="text-xs opacity-80 mb-3">
-            Class{" "}
-            {star.color === "#ffffaa" ? "G (Yellow)" : star.color === "#aaddff" ? "A (Blue)" : "M (Red)"}{" "}
-            Star
-          </p>
-          <div className="space-y-1 mb-3">
-            {planets.map((planet, i) => (
-              <div key={i} className="text-xs flex justify-between">
-                <span>{planet.name}</span>
-                <span className="opacity-60">{planet.moons} moon(s)</span>
-              </div>
-            ))}
+        <div className="bg-black/60 backdrop-blur-md p-5 rounded-2xl border border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] text-white w-[320px] flex flex-col gap-4 pointer-events-auto">
+          
+          {/* Header */}
+          <div className="flex justify-between items-start border-b border-gray-800 pb-3">
+            <div>
+              <h2 className="text-xl font-display uppercase tracking-widest font-bold text-[var(--color-ink)] drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
+                Star #{star.id.toString().padStart(3, '0')}
+              </h2>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--color-ink-muted)] mt-1 font-semibold">
+                Class {star.color === "#ffffaa" ? "G (Yellow)" : star.color === "#aaddff" ? "A (Blue)" : "M (Red)"}
+              </p>
+            </div>
+            {status === 'scanning' && (
+              <svg className="animate-spin h-5 w-5 text-yellow-500 mt-1" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            )}
           </div>
-          <button 
-            onClick={onBack} 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-3 mt-2 rounded transition-colors text-sm"
-          >
-            ← Return to Galaxy View
-          </button>
+
+          {/* Dynamic ZK Status Banner */}
+          {(gamePhase === 'playing' || status !== 'unknown') && (
+            <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center ${bannerClass}`}>
+              <div className="text-[10px] font-display font-bold uppercase tracking-[0.2em]">
+                {bannerTitle}
+              </div>
+              {bannerDesc && (
+                <div className="text-[10px] opacity-80 mt-1 uppercase tracking-widest">
+                  {bannerDesc}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Planet Info (Hidden during scanning to focus on the result) */}
+          {status !== 'scanning' && (
+            <div className="space-y-2 bg-black/40 rounded-xl p-3 border border-gray-800/80">
+              <div className="text-[9px] uppercase tracking-[0.2em] font-semibold text-[var(--color-ink-muted)] mb-2 px-1">Planetary Bodies</div>
+              {planets.map((planet, i) => (
+                <div key={i} className="text-xs flex justify-between items-center px-1">
+                  <span className="font-mono text-[var(--color-ink)]">{planet.name}</span>
+                  <span className="font-mono text-xs text-[var(--color-ink-muted)]">{planet.moons} moon{planet.moons !== 1 && 's'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Return Button */}
+          {status !== 'scanning' && (
+            <button 
+              onClick={onBack} 
+              className="mt-1 w-full border border-gray-700 hover:border-gray-500 bg-gray-900/50 hover:bg-gray-800 text-gray-300 font-display text-xs uppercase tracking-widest py-3 rounded-xl transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+            >
+              ← Return to Galaxy
+            </button>
+          )}
         </div>
       </Html>
     </group>
