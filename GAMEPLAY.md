@@ -1,4 +1,4 @@
-# The Resistance: Shadow Fleet - Gameplay Design
+# The Resistance:- Gameplay Design
 
 ## Current Implementation (V1 - Hackathon MVP)
 

@@ -17,30 +17,32 @@ export function BaseSelector({
   const sortedBases = Array.from(selectedBases).sort((a, b) => a - b);
 
   return (
-    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
+    <div className="bg-[rgba(0,167,181,0.05)] rounded-2xl p-6 border border-[rgba(0,167,181,0.3)] shadow-[0_0_20px_rgba(0,167,181,0.1)] flex flex-col gap-6">
+      
+      {/* Header */}
       <div>
-        <h3 className="text-lg font-semibold text-white mb-1">
+        <h3 className="text-xl font-serif text-[var(--color-ink)] mb-2 tracking-wide flex items-center gap-2">
           Select Your Bases
         </h3>
-        <p className="text-sm text-gray-400">
-          Click on {maxBases} stars to place your secret bases
+        <p className="text-[var(--color-ink-muted)] text-sm leading-relaxed">
+          Click on {maxBases} stars to secretly place your fleet.
         </p>
       </div>
 
       {/* Progress */}
-      <div className="bg-gray-900/50 rounded-lg p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-gray-400">Bases Selected</span>
-          <span className={`font-bold ${canCommit ? 'text-emerald-400' : 'text-white'}`}>
-            {selectedCount} / {maxBases}
+      <div className="bg-black/30 rounded-xl p-4 border border-gray-800">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs uppercase tracking-wider text-[var(--color-ink-muted)] font-display font-semibold">Bases Selected</span>
+          <span className={`font-mono text-sm font-bold ${canCommit ? 'text-[var(--color-success)]' : 'text-[var(--color-ink)]'}`}>
+            {selectedCount} <span className="text-gray-600">/</span> {maxBases}
           </span>
         </div>
-        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-gray-900 rounded-full overflow-hidden">
           <div
-            className={`h-full transition-all duration-300 ${
+            className={`h-full transition-all duration-500 ease-out ${
               canCommit
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
-                : 'bg-gradient-to-r from-blue-500 to-cyan-500'
+                ? 'bg-[var(--color-success)] shadow-[0_0_10px_var(--color-success)]'
+                : 'bg-[var(--color-accent)] shadow-[0_0_10px_var(--color-accent)]'
             }`}
             style={{ width: `${(selectedCount / maxBases) * 100}%` }}
           />
@@ -49,15 +51,15 @@ export function BaseSelector({
 
       {/* Selected bases list */}
       {selectedCount > 0 && (
-        <div className="bg-gray-900/50 rounded-lg p-3">
-          <div className="text-xs text-gray-500 mb-2">Selected Stars</div>
-          <div className="flex flex-wrap gap-1">
+        <div className="bg-black/30 rounded-xl p-4 border border-gray-800">
+          <div className="text-xs uppercase tracking-wider text-[var(--color-ink-muted)] font-display font-semibold mb-3">Selected Stars</div>
+          <div className="flex flex-wrap gap-2">
             {sortedBases.map(starId => (
               <span
                 key={starId}
-                className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/30 rounded text-xs text-emerald-400 font-mono"
+                className="px-2.5 py-1 bg-[rgba(0,167,181,0.15)] border border-[rgba(0,167,181,0.3)] rounded-md text-xs text-[var(--color-teal)] font-mono tracking-tight"
               >
-                #{starId}
+                #{starId.toString().padStart(3, '0')}
               </span>
             ))}
           </div>
@@ -65,36 +67,47 @@ export function BaseSelector({
       )}
 
       {/* Instructions */}
-      <div className="text-xs text-gray-500 space-y-1">
-        <p>• Your base locations will be kept secret using ZK proofs</p>
-        <p>• Opponents can only verify if a specific star is your base</p>
-        <p>• Choose wisely - you cannot change bases after committing</p>
+      <div className="flex flex-col gap-2 p-4 bg-gray-900/40 rounded-xl border border-gray-800/50">
+        <p className="text-xs text-[var(--color-ink-muted)] flex items-start gap-2 leading-relaxed">
+          <span className="text-[var(--color-accent)] mt-0.5 opacity-70">❖</span>
+          Your base locations will be proven in zero-knowledge.
+        </p>
+        <p className="text-xs text-[var(--color-ink-muted)] flex items-start gap-2 leading-relaxed">
+          <span className="text-[var(--color-accent)] mt-0.5 opacity-70">❖</span>
+          Opponents guess coordinates; proofs verify hits/misses.
+        </p>
+        <p className="text-xs text-[var(--color-ink-muted)] flex items-start gap-2 leading-relaxed">
+          <span className="text-[var(--color-accent)] mt-0.5 opacity-70">❖</span>
+          Once committed to the blockchain, bases cannot be moved.
+        </p>
       </div>
 
       {/* Commit button */}
-      <button
-        onClick={onCommit}
-        disabled={!canCommit || loading}
-        className={`w-full py-3 rounded-lg font-semibold transition-all ${
-          canCommit && !loading
-            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg hover:shadow-emerald-500/25'
-            : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-        }`}
-      >
-        {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            Committing Bases...
-          </span>
-        ) : canCommit ? (
-          'Commit & Start Game'
-        ) : (
-          `Select ${maxBases - selectedCount} more base${maxBases - selectedCount !== 1 ? 's' : ''}`
-        )}
-      </button>
+      <div className="mt-2">
+        <button
+          onClick={onCommit}
+          disabled={!canCommit || loading}
+          className={`w-full py-3.5 rounded-xl font-semibold uppercase tracking-widest text-xs transition-all duration-300 font-display border
+            ${canCommit && !loading
+              ? 'bg-[rgba(0,167,181,0.2)] border-[var(--color-accent)] text-[var(--color-teal)] hover:bg-[rgba(0,167,181,0.3)] hover:shadow-[0_0_15px_rgba(0,167,181,0.4)] cursor-pointer'
+              : 'bg-black/40 border-gray-800 text-gray-600 cursor-not-allowed'
+            }`}
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-3">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Committing...
+            </span>
+          ) : canCommit ? (
+            'Commit Fleet Location'
+          ) : (
+            `Select ${maxBases - selectedCount} More Base${maxBases - selectedCount !== 1 ? 's' : ''}`
+          )}
+        </button>
+      </div>
     </div>
   );
 }

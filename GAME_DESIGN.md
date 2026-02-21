@@ -1,4 +1,4 @@
-# THE RESISTANCE: SHADOW FLEET
+# THE RESISTANCE:
 
 ## Game Overview
 

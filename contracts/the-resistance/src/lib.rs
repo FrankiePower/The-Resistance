@@ -1,6 +1,6 @@
 #![no_std]
 
-//! # The Resistance: Shadow Fleet
+//! # The Resistance
 //!
 //! A ZK-powered 2-player galactic strategy game on Stellar/Soroban.
 //!

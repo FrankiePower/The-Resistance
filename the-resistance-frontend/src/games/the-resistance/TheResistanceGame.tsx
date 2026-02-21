@@ -313,12 +313,12 @@ export function TheResistanceGame({
   };
 
   return (
-    <div className="absolute inset-y-0 left-0 h-full pointer-events-none flex">
+    <div className="fixed inset-y-0 left-0 h-screen pointer-events-none flex z-50">
       
       {/* Sidebar Panel */}
       <div 
-        className={`pointer-events-auto h-full w-full sm:w-[26rem] bg-black/80 backdrop-blur-2xl border-r border-gray-700/80 shadow-[10px_0_30px_rgba(0,0,0,0.5)] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] z-40 origin-left
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full absolute'}
+        className={`pointer-events-auto h-full w-full sm:w-[26rem] bg-black/80 backdrop-blur-2xl border-r border-gray-700/80 shadow-[10px_0_30px_rgba(0,0,0,0.5)] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] origin-left
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
         {/* Header Controls */}

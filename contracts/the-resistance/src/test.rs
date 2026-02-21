@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-//! Unit tests for The Resistance: Shadow Fleet contract.
+//! Unit tests for The Resistance contract.
 //!
 //! Note: Full ZK proof verification tests require real proofs from the Noir circuit.
 //! These tests verify game state management and basic error handling.

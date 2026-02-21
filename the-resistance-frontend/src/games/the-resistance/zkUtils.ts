@@ -1,5 +1,5 @@
 /**
- * ZK Utilities for Shadow Fleet
+ * ZK Utilities
  *
  * This module handles:
  * - Poseidon2 hashing of base locations (commitment)

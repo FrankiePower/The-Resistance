@@ -52,14 +52,12 @@ export function GameHeader({
   return (
     <div className="bg-[rgba(0,167,181,0.15)] rounded-2xl p-6 border-2 border-[rgba(0,167,181,0.6)] text-[var(--color-ink)] mb-6 shadow-[0_0_20px_rgba(0,167,181,0.2)]">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        {/* Title and Phase */}
-        <div>
-          <h2 className="text-2xl font-bold mb-1">
-            Shadow Fleet
-          </h2>
+        {/* Phase */}
+     
+          
           <div className={`inline-block px-3 py-1 rounded-full bg-gray-900/10 text-sm font-semibold border border-gray-900/20`}>
             {getPhaseLabel()}
-          </div>
+          
         </div>
 
         {/* Score Display */}
@@ -92,8 +90,8 @@ export function GameHeader({
 
         {/* Session ID */}
         <div className="text-right">
-          <div className="text-xs text-gray-800 font-medium">Session</div>
-          <div className="font-mono text-sm text-gray-900 font-bold">{sessionId}</div>
+          <div className="text-xs font-medium">Session</div>
+          <div className="font-mono text-sm font-bold">{sessionId}</div>
         </div>
       </div>
 
