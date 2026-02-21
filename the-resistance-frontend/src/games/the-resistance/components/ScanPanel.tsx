@@ -43,18 +43,7 @@ export function ScanPanel({
       {isMyTurn && !scanningStarId && (
         <div className="flex flex-col gap-2">
           <label className="text-[10px] uppercase tracking-[0.2em] font-display font-semibold text-[var(--color-ink-muted)] ml-1">Command Arsenal</label>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => onActionSelect(0)}
-              className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${
-                selectedAction === 0
-                  ? 'bg-[var(--color-teal)]/10 border-[var(--color-teal)]/50 shadow-[0_0_10px_rgba(0,167,181,0.2)]'
-                  : 'bg-black/30 border-gray-800 hover:border-gray-600'
-              }`}
-            >
-              <div className={`text-base mb-1 ${selectedAction === 0 ? 'text-[var(--color-teal)] drop-shadow-[0_0_5px_rgba(0,167,181,0.5)]' : 'text-gray-500'}`}>🎯</div>
-              <div className={`text-[9px] uppercase tracking-widest font-bold ${selectedAction === 0 ? 'text-[var(--color-teal)]' : 'text-gray-500'}`}>Solar Scan</div>
-            </button>
+          <div className="grid grid-cols-2 gap-2">
             
             <button
               onClick={() => onActionSelect(1)}
@@ -82,9 +71,6 @@ export function ScanPanel({
           </div>
           
           <div className="bg-black/30 mt-1 rounded-lg p-2.5 border border-gray-800">
-            {selectedAction === 0 && (
-              <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-[var(--color-teal)] font-bold">SOLAR SCAN:</span> A standard precision attack on a single star coordinate. Pinpoint accuracy.</p>
-            )}
             {selectedAction === 1 && (
               <p className="text-[10px] text-[var(--color-ink-muted)] leading-relaxed"><span className="text-yellow-500 font-bold">DEEP RADAR:</span> Scans a 3x3 sector around the target. Reveals the total number of enemy signatures nearby.</p>
             )}
