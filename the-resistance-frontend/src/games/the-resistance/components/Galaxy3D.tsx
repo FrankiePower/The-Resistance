@@ -194,17 +194,28 @@ function Star({ data, onClick }: StarProps) {
   const hoveredStarId = useGameStore(state => state.hoveredStarId)
   const selectedAction = useGameStore(state => state.selectedAction)
   
-  const hovered = hoveredStarId === data.id
+  // Calculate if this star is being targeted by the Arm Strike superweapon preview
+  const isArmHovered = useMemo(() => {
+    if (selectedAction === 2 && hoveredStarId !== null) {
+      const armStart = Math.floor(hoveredStarId / 50) * 50;
+      return data.id >= armStart && data.id < armStart + 50;
+    }
+    return false;
+  }, [selectedAction, hoveredStarId, data.id]);
+
+  const hovered = hoveredStarId === data.id || isArmHovered;
 
   // Visuals based on Game State
   const renderColor = useMemo(() => {
     if (status === 'base') return "#00ff00" // Neon Green for my bases
     if (status === 'hit') return "#ff0000" // Red for hits
     if (status === 'miss') return "#555555" // Dull grey for misses
+    if (status === 'scorched') return "#4a1c1c" // Dark burnt crimson for destroyed arm
     if (status === 'scanning') return "#ffff00" // Yellow for scanning
     if (status === 'opponent-scanned') return "#ffaa00" // Orange for enemy scans
+    if (isArmHovered) return "#ff3333" // Bright red hover effect for Arm Strike
     return data.color // Default color for available/unknown
-  }, [status, data.color])
+  }, [status, data.color, isArmHovered])
 
   const radarRef = useRef<THREE.Mesh>(null)
 

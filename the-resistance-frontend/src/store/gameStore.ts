@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type StarStatus = 'base' | 'hit' | 'miss' | 'unknown' | 'scanning' | 'opponent-scanned' | 'available';
+export type StarStatus = 'base' | 'hit' | 'miss' | 'unknown' | 'scanning' | 'opponent-scanned' | 'available' | 'scorched';
 
 interface GameState {
   hoveredStarId: number | null;

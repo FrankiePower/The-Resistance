@@ -131,26 +131,30 @@ export function ScanPanel({
               <div
                 key={`${scan.starId}-${scan.timestamp}`}
                 className={`p-2.5 rounded-lg flex items-center justify-between ${
-                  scan.actionType === 1 
-                    ? 'bg-[rgba(253,218,36,0.1)] border border-[rgba(253,218,36,0.3)] shadow-[0_0_10px_rgba(253,218,36,0.1)]'
-                    : scan.isBase
-                      ? 'bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.3)] shadow-[0_0_10px_rgba(16,185,129,0.1)]'
-                      : 'bg-black/40 border border-gray-800'
+                  scan.actionType === 2
+                    ? 'bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] shadow-[0_0_10px_rgba(239,68,68,0.1)]'
+                    : scan.actionType === 1 
+                      ? 'bg-[rgba(253,218,36,0.1)] border border-[rgba(253,218,36,0.3)] shadow-[0_0_10px_rgba(253,218,36,0.1)]'
+                      : scan.isBase
+                        ? 'bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.3)] shadow-[0_0_10px_rgba(16,185,129,0.1)]'
+                        : 'bg-black/40 border border-gray-800'
                 }`}
               >
                 <span className={`font-mono text-xs ${
-                  scan.actionType === 1 ? 'text-yellow-400 font-bold' 
+                  scan.actionType === 2 ? 'text-red-400 font-bold'
+                  : scan.actionType === 1 ? 'text-yellow-400 font-bold' 
                   : scan.isBase ? 'text-emerald-400 font-bold' 
                   : 'text-gray-400'
                 }`}>
-                  {scan.actionType === 1 ? `RADAR @ #${scan.starId.toString().padStart(3, '0')}` : `Star #${scan.starId.toString().padStart(3, '0')}`}
+                  {scan.actionType === 2 ? `ARM STRIKE @ #${scan.starId.toString().padStart(3, '0')}` : scan.actionType === 1 ? `RADAR @ #${scan.starId.toString().padStart(3, '0')}` : `Star #${scan.starId.toString().padStart(3, '0')}`}
                 </span>
                 <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                  scan.actionType === 1 ? 'text-yellow-400 drop-shadow-[0_0_5px_rgba(253,218,36,0.5)]'
+                  scan.actionType === 2 ? 'text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]'
+                  : scan.actionType === 1 ? 'text-yellow-400 drop-shadow-[0_0_5px_rgba(253,218,36,0.5)]'
                   : scan.isBase ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]' 
                   : 'text-gray-500'
                 }`}>
-                  {scan.actionType === 1 ? `${scan.countFound} FOUND` : scan.isBase ? 'HIT' : 'MISS'}
+                  {scan.actionType === 2 ? `${scan.countFound} DESTROYED` : scan.actionType === 1 ? `${scan.countFound} FOUND` : scan.isBase ? 'HIT' : 'MISS'}
                 </span>
               </div>
             ))}

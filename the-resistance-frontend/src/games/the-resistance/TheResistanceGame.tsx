@@ -94,11 +94,16 @@ export function TheResistanceGame({
 
   // Calculate scanned stars for visualization
   const scannedStars = useMemo(() => {
-    const scanned = new Map<number, 'hit' | 'miss'>();
+    const scanned = new Map<number, 'hit' | 'miss' | 'scorched'>();
     myScans.forEach(scan => {
       // Only precision strikes change the color of the star
       if (scan.actionType === 0 || scan.actionType === undefined) {
         scanned.set(scan.starId, scan.isBase ? 'hit' : 'miss');
+      } else if (scan.actionType === 2) {
+        const armStart = Math.floor(scan.starId / 50) * 50;
+        for (let i = armStart; i < armStart + 50; i++) {
+          scanned.set(i, 'scorched');
+        }
       }
     });
     return scanned;
@@ -134,9 +139,17 @@ export function TheResistanceGame({
   useEffect(() => {
     const states: Record<number, StarStatus> = {};
     for (let i = 0; i < TOTAL_STARS; i++) {
-      if (scanningStarId === i) {
-        states[i] = 'scanning';
-        continue;
+      if (scanningStarId !== null) {
+        if (selectedAction === 2) {
+          const armStart = Math.floor(scanningStarId / 50) * 50;
+          if (i >= armStart && i < armStart + 50) {
+            states[i] = 'scanning';
+            continue;
+          }
+        } else if (scanningStarId === i) {
+          states[i] = 'scanning';
+          continue;
+        }
       }
       if (gamePhase === 'setup') {
         states[i] = selectedBases.has(i) ? 'base' : 'available';
@@ -230,6 +243,8 @@ export function TheResistanceGame({
       let countFound = 0;
       if (selectedAction === 1) {
         countFound = Math.floor(Math.random() * 4); // 0 to 3 signatures
+      } else if (selectedAction === 2) {
+        countFound = Math.floor(Math.random() * 4); // Simulate destroying 0 to 3 bases in the arm
       }
 
       const result: ScanResult = {
@@ -244,6 +259,20 @@ export function TheResistanceGame({
 
       if (selectedAction === 1) {
         setSuccess(`[RADAR LOG] Scan complete at Star ${starId}. Detected ${countFound} enemy signatures in local proximity.`);
+      } else if (selectedAction === 2) {
+        const newCount = myFoundCount + countFound;
+        setMyFoundCount(newCount);
+        const armColors = ["Alpha", "Beta", "Gamma", "Delta"];
+        const armName = armColors[Math.floor(starId / 50)] || "Alpha";
+        
+        setSuccess(`[SUPERWEAPON TRIGGERED] Galactic Arm ${armName} incinerated! ${countFound} Enemy Bases destroyed in the blast. (${newCount}/${BASES_PER_PLAYER})`);
+
+        if (newCount >= BASES_PER_PLAYER) {
+          setWinner(userAddress);
+          setGamePhase('complete');
+          onGameComplete();
+          return;
+        }
       } else if (isBase) {
         const newCount = myFoundCount + 1;
         setMyFoundCount(newCount);
