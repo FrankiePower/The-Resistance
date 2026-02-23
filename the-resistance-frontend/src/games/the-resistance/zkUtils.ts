@@ -1,89 +1,197 @@
 /**
- * ZK Utilities
+ * ZK Utilities for The Resistance
  *
  * This module handles:
  * - Poseidon2 hashing of base locations (commitment)
- * - ZK proof generation for scans
+ * - ZK proof generation for game actions
  *
- * Note: Full ZK proof generation requires @aztec/bb.js and the compiled circuit.
- * For now, we provide mock implementations that can be replaced later.
+ * Uses @noir-lang/noir_js for circuit execution and @aztec/bb.js for proving
  */
 
-// Mock Poseidon2 hash implementation
-// In production, this would use the actual Poseidon2 hash function
-// from @aztec/bb.js or a compatible library
+import { Noir } from '@noir-lang/noir_js';
+import { UltraHonkBackend } from '@aztec/bb.js';
+import { Barretenberg, Fr } from '@aztec/bb.js';
+
+// Circuit configuration
+const CIRCUIT_PATH = '/circuits.json';
+const MAX_NEIGHBORS = 20;
+
+// Singleton instances
+let noirInstance: Noir | null = null;
+let backendInstance: UltraHonkBackend | null = null;
+let bbInstance: Barretenberg | null = null;
+
+// Action types (must match circuit)
+export const ACTION_SOLAR_SCAN = 0;
+export const ACTION_DEEP_RADAR = 1;
+export const ACTION_ARM_STRIKE = 2;
+
+export type ActionType = 0 | 1 | 2;
+
+/**
+ * Initialize the ZK prover (loads circuit and sets up backend)
+ * Call this once at app startup
+ */
+export async function initZK(): Promise<void> {
+  if (noirInstance && backendInstance) {
+    console.log('[ZK] Already initialized');
+    return;
+  }
+
+  console.log('[ZK] Initializing...');
+
+  try {
+    // Load compiled circuit
+    const response = await fetch(CIRCUIT_PATH);
+    if (!response.ok) {
+      throw new Error(`Failed to load circuit: ${response.statusText}`);
+    }
+    const circuit = await response.json();
+    console.log('[ZK] Circuit loaded');
+
+    // Initialize Noir
+    noirInstance = new Noir(circuit);
+    console.log('[ZK] Noir initialized');
+
+    // Initialize UltraHonk backend
+    backendInstance = new UltraHonkBackend(circuit.bytecode);
+    console.log('[ZK] Backend initialized');
+
+    // Initialize Barretenberg for hashing
+    bbInstance = await Barretenberg.new();
+    console.log('[ZK] Barretenberg initialized');
+
+    console.log('[ZK] ✓ Initialization complete');
+  } catch (err) {
+    console.error('[ZK] Initialization failed:', err);
+    throw err;
+  }
+}
+
+/**
+ * Compute Poseidon2 hash of base locations
+ * This creates the commitment that gets stored on-chain
+ */
 export async function hashBases(bases: number[]): Promise<string> {
+  if (!bbInstance) {
+    await initZK();
+  }
+
+  if (bases.length !== 10) {
+    throw new Error('Must provide exactly 10 bases');
+  }
+
   // Sort bases for deterministic hashing
   const sortedBases = [...bases].sort((a, b) => a - b);
 
-  // For now, use a simple hash (will be replaced with actual Poseidon2)
-  // This is just for UI development - the actual commitment will use Poseidon2
-  const encoder = new TextEncoder();
-  const data = encoder.encode(sortedBases.join(','));
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  // Convert to Field elements
+  const baseFields = sortedBases.map(b => new Fr(BigInt(b)));
 
-  console.log('[ZK] Generated mock commitment for bases:', sortedBases);
-  console.log('[ZK] Commitment hash:', hashHex);
+  // Compute Poseidon2 hash
+  const hash = await bbInstance!.poseidon2Hash(baseFields);
 
-  return hashHex;
+  console.log('[ZK] Generated commitment for bases:', sortedBases);
+  console.log('[ZK] Commitment hash:', hash.toString());
+
+  return hash.toString();
 }
 
 // Proof generation types
-export interface ScanProofInputs {
-  bases: number[];           // Private: Your base locations
+export interface ActionProofInputs {
+  bases: number[];           // Private: Your 10 base star IDs
   basesHash: string;         // Public: Commitment hash
-  targetStar: number;        // Public: Star being scanned
+  actionType: ActionType;    // Public: 0, 1, or 2
+  targetId: number;          // Public: Target star ID
+  neighbors: number[];       // Public: Neighbor IDs for Deep Radar
 }
 
-export interface ScanProof {
+export interface ActionProof {
   proofBytes: Uint8Array;    // The actual proof
-  isBase: boolean;           // Whether target is a base (public output)
+  resultCount: number;       // Number of bases found/destroyed (public output)
 }
 
 /**
- * Generate a ZK proof for scanning a star
+ * Generate a ZK proof for a game action
  *
  * This proves:
- * 1. You know the preimage (base locations) of the commitment
- * 2. The target star is/isn't one of those bases
+ * 1. You know the bases matching the commitment
+ * 2. The result count is correct for the given action
  *
- * Without revealing which other stars are bases.
+ * Without revealing which stars are bases.
  */
-export async function generateScanProof(inputs: ScanProofInputs): Promise<ScanProof> {
-  console.log('[ZK] Generating proof for scan:', {
-    targetStar: inputs.targetStar,
-    basesHash: inputs.basesHash.slice(0, 16) + '...'
+export async function generateActionProof(inputs: ActionProofInputs): Promise<ActionProof> {
+  if (!noirInstance || !backendInstance) {
+    await initZK();
+  }
+
+  console.log('[ZK] Generating proof for action:', {
+    actionType: inputs.actionType,
+    targetId: inputs.targetId,
+    basesHash: inputs.basesHash.slice(0, 20) + '...'
   });
 
-  // Check if target is a base
-  const isBase = inputs.bases.includes(inputs.targetStar);
+  // Sort bases to match commitment
+  const sortedBases = [...inputs.bases].sort((a, b) => a - b);
 
-  // TODO: Replace with actual proof generation using @aztec/bb.js
-  // For now, return a mock proof
-  await simulateProofGeneration();
+  // Pad neighbors to MAX_NEIGHBORS
+  const paddedNeighbors: number[] = new Array(MAX_NEIGHBORS).fill(0);
+  for (let i = 0; i < Math.min(inputs.neighbors.length, MAX_NEIGHBORS); i++) {
+    paddedNeighbors[i] = inputs.neighbors[i];
+  }
 
-  const mockProof = new Uint8Array(14592); // PROOF_BYTES = 456 * 32
-  crypto.getRandomValues(mockProof);
-
-  console.log('[ZK] Proof generated:', {
-    isBase,
-    proofSize: mockProof.length
-  });
-
-  return {
-    proofBytes: mockProof,
-    isBase
+  // Build circuit inputs
+  const circuitInputs = {
+    bases: sortedBases.map(b => b.toString()),
+    bases_hash: inputs.basesHash,
+    action_type: inputs.actionType.toString(),
+    target_id: inputs.targetId.toString(),
+    neighbors: paddedNeighbors.map(n => n.toString()),
+    neighbor_count: inputs.neighbors.length.toString(),
   };
+
+  console.log('[ZK] Circuit inputs prepared');
+
+  try {
+    // Execute circuit to get witness and return value
+    const { witness, returnValue } = await noirInstance!.execute(circuitInputs);
+    console.log('[ZK] Circuit executed, result:', returnValue);
+
+    // Extract result count from return value
+    const resultCount = typeof returnValue === 'string'
+      ? parseInt(returnValue, 16)
+      : Number(returnValue);
+
+    // Generate proof
+    console.log('[ZK] Generating proof...');
+    const proof = await backendInstance!.generateProof(witness);
+    console.log('[ZK] Proof generated, size:', proof.proof.length);
+
+    return {
+      proofBytes: proof.proof,
+      resultCount,
+    };
+  } catch (err) {
+    console.error('[ZK] Proof generation failed:', err);
+    throw err;
+  }
 }
 
 /**
- * Simulate proof generation time
+ * Verify a proof locally (for testing)
  */
-async function simulateProofGeneration(): Promise<void> {
-  // Simulate the time it takes to generate a real proof
-  await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500));
+export async function verifyProof(proof: Uint8Array): Promise<boolean> {
+  if (!backendInstance) {
+    await initZK();
+  }
+
+  try {
+    const isValid = await backendInstance!.verifyProof({ proof, publicInputs: [] });
+    console.log('[ZK] Proof verification:', isValid ? 'VALID' : 'INVALID');
+    return isValid;
+  } catch (err) {
+    console.error('[ZK] Proof verification failed:', err);
+    return false;
+  }
 }
 
 /**
@@ -99,9 +207,10 @@ export function proofToHex(proof: Uint8Array): string {
  * Convert hex string to proof bytes
  */
 export function hexToProof(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
+  const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(cleanHex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    bytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
 }
@@ -110,11 +219,23 @@ export function hexToProof(hex: string): Uint8Array {
  * Convert a 32-byte hash to the format expected by the contract (BytesN<32>)
  */
 export function hashToBytes32(hashHex: string): Uint8Array {
-  // Remove 0x prefix if present
   const cleanHex = hashHex.startsWith('0x') ? hashHex.slice(2) : hashHex;
-
-  // Pad to 64 chars (32 bytes)
   const paddedHex = cleanHex.padStart(64, '0');
-
   return hexToProof(paddedHex);
+}
+
+/**
+ * Cleanup resources (call on app unmount if needed)
+ */
+export async function destroyZK(): Promise<void> {
+  if (backendInstance) {
+    await backendInstance.destroy();
+    backendInstance = null;
+  }
+  if (bbInstance) {
+    await bbInstance.destroy();
+    bbInstance = null;
+  }
+  noirInstance = null;
+  console.log('[ZK] Resources cleaned up');
 }

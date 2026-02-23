@@ -1,17 +1,26 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import type { ActionType } from './zkUtils';
 import { useWallet } from '@/hooks/useWallet';
 import { DevWalletService } from '@/services/devWalletService';
 import { GalaxyGrid } from './components/GalaxyGrid';
 import { GameHeader } from './components/GameHeader';
 import { BaseSelector } from './components/BaseSelector';
 import { ScanPanel } from './components/ScanPanel';
-import { hashBases } from './zkUtils';
+import {
+  hashBases,
+  generateActionProof,
+  initZK,
+  ACTION_SOLAR_SCAN,
+  ACTION_DEEP_RADAR,
+  ACTION_ARM_STRIKE,
+} from './zkUtils';
 import { useGameStore, StarStatus } from '../../store/gameStore';
-import { Menu, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 // Constants from contract
 const TOTAL_STARS = 200;
 const BASES_PER_PLAYER = 10;
+const STARS_PER_ARM = 20; // 10 arms of 20 stars each
 
 const createRandomSessionId = (): number => {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -36,7 +45,8 @@ export interface ScanResult {
   countFound?: number;
 }
 
-export type ActionType = 0 | 1 | 2; // 0: Strike, 1: Radar, 2: Orbital
+// Re-export ActionType for other components
+export type { ActionType } from './zkUtils';
 
 interface TheResistanceGameProps {
   userAddress: string;
@@ -67,6 +77,10 @@ export function TheResistanceGame({
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
 
+  // Simulated opponent bases (for demo - in production, opponent commits their own bases)
+  const [simulatedOpponentBases, setSimulatedOpponentBases] = useState<number[]>([]);
+  const [opponentBasesHash, setOpponentBasesHash] = useState<string | null>(null);
+
   // UI state
   const [loading, setLoading] = useState(false);
   const [scanningStarId, setScanningStarId] = useState<number | null>(null);
@@ -92,16 +106,29 @@ export function TheResistanceGame({
     && DevWalletService.isPlayerAvailable(1)
     && DevWalletService.isPlayerAvailable(2);
 
+  // Initialize ZK prover on mount
+  const zkInitialized = useRef(false);
+  useEffect(() => {
+    if (!zkInitialized.current) {
+      zkInitialized.current = true;
+      initZK().catch(err => {
+        console.error('Failed to initialize ZK:', err);
+        setError('Failed to initialize ZK prover. Some features may not work.');
+      });
+    }
+  }, []);
+
   // Calculate scanned stars for visualization
   const scannedStars = useMemo(() => {
     const scanned = new Map<number, 'hit' | 'miss' | 'scorched'>();
     myScans.forEach(scan => {
       // Only precision strikes change the color of the star
-      if (scan.actionType === 0 || scan.actionType === undefined) {
+      if (scan.actionType === ACTION_SOLAR_SCAN || scan.actionType === undefined) {
         scanned.set(scan.starId, scan.isBase ? 'hit' : 'miss');
-      } else if (scan.actionType === 2) {
-        const armStart = Math.floor(scan.starId / 50) * 50;
-        for (let i = armStart; i < armStart + 50; i++) {
+      } else if (scan.actionType === ACTION_ARM_STRIKE) {
+        // Mark entire arm as scorched
+        const armStart = Math.floor(scan.starId / STARS_PER_ARM) * STARS_PER_ARM;
+        for (let i = armStart; i < armStart + STARS_PER_ARM; i++) {
           scanned.set(i, 'scorched');
         }
       }
@@ -140,9 +167,9 @@ export function TheResistanceGame({
     const states: Record<number, StarStatus> = {};
     for (let i = 0; i < TOTAL_STARS; i++) {
       if (scanningStarId !== null) {
-        if (selectedAction === 2) {
-          const armStart = Math.floor(scanningStarId / 50) * 50;
-          if (i >= armStart && i < armStart + 50) {
+        if (selectedAction === ACTION_ARM_STRIKE) {
+          const armStart = Math.floor(scanningStarId / STARS_PER_ARM) * STARS_PER_ARM;
+          if (i >= armStart && i < armStart + STARS_PER_ARM) {
             states[i] = 'scanning';
             continue;
           }
@@ -199,6 +226,25 @@ export function TheResistanceGame({
       const commitment = await hashBases(basesArray);
       setBasesCommitment(commitment);
 
+      // Generate simulated opponent bases (for demo)
+      const opponentBasesSet = new Set<number>();
+      while (opponentBasesSet.size < BASES_PER_PLAYER) {
+        const randomStar = Math.floor(Math.random() * TOTAL_STARS);
+        // Don't place opponent bases on same stars as player
+        if (!selectedBases.has(randomStar)) {
+          opponentBasesSet.add(randomStar);
+        }
+      }
+      const opponentBasesArray = Array.from(opponentBasesSet).sort((a, b) => a - b);
+      setSimulatedOpponentBases(opponentBasesArray);
+
+      // Hash opponent bases
+      const opponentCommitment = await hashBases(opponentBasesArray);
+      setOpponentBasesHash(opponentCommitment);
+
+      console.log('[Game] Your bases:', basesArray);
+      console.log('[Game] Opponent bases (simulated):', opponentBasesArray);
+
       // TODO: Create game on-chain with this commitment
       // For now, move to waiting phase
       setSuccess('Bases committed! Waiting for opponent...');
@@ -219,7 +265,20 @@ export function TheResistanceGame({
     }
   };
 
-  // Handle star scan
+  // Compute neighbors for Deep Radar (simple index-based for now)
+  // In production, this would use actual 3D positions
+  const computeNeighbors = useCallback((starId: number): number[] => {
+    const neighbors: number[] = [];
+    const radius = 5; // Stars within ±5 IDs are neighbors
+    for (let i = Math.max(0, starId - radius); i <= Math.min(TOTAL_STARS - 1, starId + radius); i++) {
+      if (i !== starId) {
+        neighbors.push(i);
+      }
+    }
+    return neighbors;
+  }, []);
+
+  // Handle star scan with real ZK proof generation
   const handleScanStar = async (starId: number) => {
     if (!isMyTurn || isBusy || gamePhase !== 'playing') return;
     if (scannedStars.has(starId)) {
@@ -227,25 +286,47 @@ export function TheResistanceGame({
       return;
     }
 
+    // For Arm Strike, check if arm was already struck
+    if (selectedAction === ACTION_ARM_STRIKE) {
+      const armId = Math.floor(starId / STARS_PER_ARM);
+      const alreadyStruck = myScans.some(
+        scan => scan.actionType === ACTION_ARM_STRIKE &&
+                Math.floor(scan.starId / STARS_PER_ARM) === armId
+      );
+      if (alreadyStruck) {
+        setError('This arm has already been struck!');
+        return;
+      }
+    }
+
     setScanningStarId(starId);
     setError(null);
 
     try {
-      // TODO: Generate ZK proof
-      // For now, simulate with random result
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate proof generation
+      // Get opponent's bases (in real multiplayer, this comes from opponent's commitment)
+      // For demo, we'll simulate opponent having random bases
+      const opponentBases = simulatedOpponentBases;
 
-      // TODO: Submit scan to contract
-      // For now, simulate random result
-      const isBase = Math.random() < 0.05; // 5% chance (10 bases / 200 stars)
-      
-      // If Radar, simulate finding a few signatures around
-      let countFound = 0;
-      if (selectedAction === 1) {
-        countFound = Math.floor(Math.random() * 4); // 0 to 3 signatures
-      } else if (selectedAction === 2) {
-        countFound = Math.floor(Math.random() * 4); // Simulate destroying 0 to 3 bases in the arm
-      }
+      // Compute neighbors for Deep Radar
+      const neighbors = selectedAction === ACTION_DEEP_RADAR
+        ? computeNeighbors(starId)
+        : [];
+
+      console.log('[Game] Generating ZK proof for action:', selectedAction, 'target:', starId);
+
+      // Generate real ZK proof
+      const proof = await generateActionProof({
+        bases: opponentBases,
+        basesHash: opponentBasesHash!,
+        actionType: selectedAction as 0 | 1 | 2,
+        targetId: starId,
+        neighbors,
+      });
+
+      console.log('[Game] Proof generated, result:', proof.resultCount);
+
+      const countFound = proof.resultCount;
+      const isBase = countFound > 0;
 
       const result: ScanResult = {
         starId,
@@ -257,14 +338,16 @@ export function TheResistanceGame({
 
       setMyScans(prev => [...prev, result]);
 
-      if (selectedAction === 1) {
+      // Handle results based on action type
+      if (selectedAction === ACTION_DEEP_RADAR) {
         setSuccess(`[RADAR LOG] Scan complete at Star ${starId}. Detected ${countFound} enemy signatures in local proximity.`);
-      } else if (selectedAction === 2) {
+        // Deep Radar doesn't switch turns
+      } else if (selectedAction === ACTION_ARM_STRIKE) {
         const newCount = myFoundCount + countFound;
         setMyFoundCount(newCount);
-        const armColors = ["Alpha", "Beta", "Gamma", "Delta"];
-        const armName = armColors[Math.floor(starId / 50)] || "Alpha";
-        
+        const armNames = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"];
+        const armName = armNames[Math.floor(starId / STARS_PER_ARM)] || "Unknown";
+
         setSuccess(`[SUPERWEAPON TRIGGERED] Galactic Arm ${armName} incinerated! ${countFound} Enemy Bases destroyed in the blast. (${newCount}/${BASES_PER_PLAYER})`);
 
         if (newCount >= BASES_PER_PLAYER) {
@@ -273,31 +356,36 @@ export function TheResistanceGame({
           onGameComplete();
           return;
         }
-      } else if (isBase) {
-        const newCount = myFoundCount + 1;
-        setMyFoundCount(newCount);
-        setSuccess(`HIT! Found enemy base at Star ${starId}! (${newCount}/${BASES_PER_PLAYER})`);
 
-        if (newCount >= BASES_PER_PLAYER) {
-          setWinner(userAddress);
-          setGamePhase('complete');
-          onGameComplete();
-          return;
-        }
+        // Switch turns
+        setIsMyTurn(false);
+        setTimeout(() => simulateOpponentTurn(), 1500);
+
       } else {
-        setSuccess(`Miss. No base at Star ${starId}.`);
+        // Solar Scan
+        if (isBase) {
+          const newCount = myFoundCount + 1;
+          setMyFoundCount(newCount);
+          setSuccess(`HIT! Found enemy base at Star ${starId}! (${newCount}/${BASES_PER_PLAYER})`);
+
+          if (newCount >= BASES_PER_PLAYER) {
+            setWinner(userAddress);
+            setGamePhase('complete');
+            onGameComplete();
+            return;
+          }
+        } else {
+          setSuccess(`Miss. No base at Star ${starId}.`);
+        }
+
+        // Switch turns
+        setIsMyTurn(false);
+        setTimeout(() => simulateOpponentTurn(), 1500);
       }
 
-      // Switch turns
-      setIsMyTurn(false);
-
-      // Simulate opponent's turn (remove in production)
-      setTimeout(() => {
-        simulateOpponentTurn();
-      }, 1500);
-
     } catch (err) {
-      setError(`Scan failed: ${err}`);
+      console.error('[Game] Scan failed:', err);
+      setError(`Scan failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setScanningStarId(null);
     }
@@ -356,6 +444,8 @@ export function TheResistanceGame({
     setGamePhase('setup');
     setSelectedBases(new Set());
     setBasesCommitment(null);
+    setSimulatedOpponentBases([]);
+    setOpponentBasesHash(null);
     setMyScans([]);
     setOpponentScans([]);
     setMyFoundCount(0);

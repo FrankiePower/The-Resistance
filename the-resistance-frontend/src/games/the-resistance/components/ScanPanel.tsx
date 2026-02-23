@@ -5,7 +5,7 @@ interface ScanPanelProps {
   isMyTurn: boolean;
   scanningStarId: number | null;
   hoveredStar: number | null;
-  scannedStars: Map<number, 'hit' | 'miss'>;
+  scannedStars: Map<number, 'hit' | 'miss' | 'scorched'>;
   recentScans: ScanResult[];
   selectedAction: ActionType;
   onActionSelect: (action: ActionType) => void;
