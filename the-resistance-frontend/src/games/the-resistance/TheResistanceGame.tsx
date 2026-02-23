@@ -403,9 +403,17 @@ export function TheResistanceGame({
     setError(null);
 
     try {
-      // Get opponent's bases (in real multiplayer, this comes from opponent's commitment)
-      // For demo, we'll simulate opponent having random bases
-      const opponentBases = simulatedOpponentBases;
+      // Demo mode keeps both players' base sets locally.
+      // Player 1 attacks simulated opponent bases; Player 2 attacks Player 1 selected bases.
+      const isPlayer1TurnInDemo = userAddress === player1Address;
+      const opponentBases = isPlayer1TurnInDemo
+        ? simulatedOpponentBases
+        : Array.from(selectedBases).sort((a, b) => a - b);
+      const proofTargetHash = isPlayer1TurnInDemo ? opponentBasesHash : basesCommitment;
+
+      if (!proofTargetHash) {
+        throw new Error('Missing opponent commitment for proof generation');
+      }
 
       // Compute neighbors for Deep Radar
       const neighbors = selectedAction === ACTION_DEEP_RADAR
@@ -417,7 +425,7 @@ export function TheResistanceGame({
       // Generate real ZK proof
       const proof = await generateActionProof({
         bases: opponentBases,
-        basesHash: opponentBasesHash!,
+        basesHash: proofTargetHash,
         actionType: selectedAction as 0 | 1 | 2,
         targetId: starId,
         neighbors,
@@ -440,7 +448,7 @@ export function TheResistanceGame({
 
       console.log('[Game] On-chain execute_action result:', onChainCount);
 
-      const countFound = Number(onChainCount);
+      const countFound = Number.isFinite(onChainCount) ? onChainCount : proof.resultCount;
       const isBase = countFound > 0;
 
       const result: ScanResult = {
@@ -455,11 +463,11 @@ export function TheResistanceGame({
 
       // Handle results based on action type
       if (selectedAction === ACTION_DEEP_RADAR) {
-        setSuccess(`[RADAR LOG] Scan complete at Star ${starId}. Detected ${countFound} enemy signatures in local proximity.`);
+        setSuccess(`Deep Radar at Star ${starId}: ${countFound} enemy bases detected nearby.`);
       } else if (selectedAction === ACTION_ARM_STRIKE) {
         const armNames = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"];
         const armName = armNames[Math.floor(starId / STARS_PER_ARM)] || "Unknown";
-        setSuccess(`[SUPERWEAPON TRIGGERED] Galactic Arm ${armName} incinerated! ${countFound} enemy bases destroyed.`);
+        setSuccess(`Arm Strike on ${armName}: ${countFound} enemy bases destroyed.`);
 
       } else {
         if (isBase) {
@@ -606,7 +614,7 @@ export function TheResistanceGame({
                         Start game tx
                       </a>
                     ) : (
-                      <span className="text-emerald-300">Start game tx: {startGameTxHash}</span>
+                      <span className="text-emerald-300">Start game tx recorded</span>
                     )}
                   </div>
                 )}

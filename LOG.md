@@ -182,3 +182,42 @@ That circuit defines your game rule proof:
 - Ran frontend build:
   - `cd the-resistance-frontend && bun run build`
   - Result: `SUCCESS`
+
+## 2026-02-23 - Success #6: Player 2 Proof Target Fix
+
+- Goal: Fix `Error(Contract, #6)` when executing action after switching to Player 2.
+- Root cause: UI always generated proofs against `opponentBasesHash` (Player 1's target), even on Player 2 turns.
+- Fix: In `TheResistanceGame.tsx`, choose proof inputs by active player:
+  - Player 1 -> prove against simulated opponent bases/hash.
+  - Player 2 -> prove against Player 1 selected bases/commitment.
+- Verification: `cd the-resistance-frontend && bun run build` succeeded.
+
+## 2026-02-23 - Success #7: NaN UI Cleanup + Result Normalization
+
+- Goal: Remove `NaN` in action results and clean command-center status text.
+- Root cause: `execute_action` returns wrapper objects (e.g., `Ok2 { value: n }`) and UI cast with `Number(...)`.
+- Fixes:
+  - `theResistanceService.ts`: normalize execute result into plain `number` (`value`/`unwrap`/`bigint` aware).
+  - `TheResistanceGame.tsx`: fallback to `proof.resultCount` if parsed value is non-finite.
+  - Cleaned action success strings.
+  - Local mode start tx line now shows `Start game tx recorded` (no long hash clutter).
+- Verification: `cd the-resistance-frontend && bun run build` succeeded.
+
+## 2026-02-23 - Success #8: Local UI End-to-End Confirmed (All Actions)
+
+- Goal: Validate full local UI flow after wallet/env and proof fixes.
+- Status: `SUCCESS`
+
+### Confirmed in browser logs
+- Local config active:
+  - `rpcUrl: http://localhost:8000/soroban/rpc`
+  - `networkPassphrase: Standalone Network ; February 2017`
+- `start_game` succeeds and returns tx hash.
+- `execute_action` succeeds for both players after switching dev wallets.
+- Action types verified in UI flow:
+  - `0` Solar Scan
+  - `1` Deep Radar
+  - `2` Arm Strike
+
+### Notes
+- Browser extension errors about `window.ethereum`/MetaMask are unrelated to Soroban flow and do not block gameplay.

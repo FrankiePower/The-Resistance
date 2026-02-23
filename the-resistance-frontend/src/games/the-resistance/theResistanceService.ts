@@ -306,12 +306,42 @@ export class TheResistanceService {
         throw new Error(`Transaction failed: ${errorMessage}`);
       }
 
-      // Result is the count of bases found/destroyed
-      return sentTx.result;
+      return this.normalizeActionCount(sentTx.result);
     } catch (err) {
       console.error('[executeAction] Error:', err);
       throw err;
     }
+  }
+
+  private normalizeActionCount(raw: unknown): number {
+    if (typeof raw === 'number') return raw;
+    if (typeof raw === 'bigint') return Number(raw);
+
+    if (raw && typeof raw === 'object') {
+      const obj = raw as {
+        value?: unknown;
+        unwrap?: () => unknown;
+        isOk?: () => boolean;
+      };
+
+      if ('value' in obj) {
+        if (typeof obj.value === 'number') return obj.value;
+        if (typeof obj.value === 'bigint') return Number(obj.value);
+      }
+
+      if (typeof obj.isOk === 'function' && typeof obj.unwrap === 'function' && obj.isOk()) {
+        const unwrapped = obj.unwrap();
+        if (typeof unwrapped === 'number') return unwrapped;
+        if (typeof unwrapped === 'bigint') return Number(unwrapped);
+        if (unwrapped && typeof unwrapped === 'object' && 'value' in (unwrapped as { value?: unknown })) {
+          const nested = (unwrapped as { value?: unknown }).value;
+          if (typeof nested === 'number') return nested;
+          if (typeof nested === 'bigint') return Number(nested);
+        }
+      }
+    }
+
+    throw new Error(`Unexpected execute_action result shape: ${String(raw)}`);
   }
 
   /**
