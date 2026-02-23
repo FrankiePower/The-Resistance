@@ -32,6 +32,14 @@ function parseEnv(content: string): EnvMap {
   return out;
 }
 
+function readEnvFileIfExists(path: string): EnvMap {
+  try {
+    return parseEnv(readFileSync(path, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
 async function waitForTx(server: rpc.Server, hash: string): Promise<rpc.Api.GetTransactionResponse> {
   for (;;) {
     const tx = await server.getTransaction(hash);
@@ -61,9 +69,12 @@ async function loadSourceAccount(
 }
 
 async function main() {
-  const rootEnvPath = resolve(process.cwd(), '..', '.env');
-  const env = parseEnv(readFileSync(rootEnvPath, 'utf8'));
   const runtimeEnv = process.env as Record<string, string | undefined>;
+  const localEnvPath = resolve(process.cwd(), '.env.local');
+  const rootEnvPath = resolve(process.cwd(), '..', '.env');
+  const localEnv = readEnvFileIfExists(localEnvPath);
+  const rootEnv = readEnvFileIfExists(rootEnvPath);
+  const env: EnvMap = { ...rootEnv, ...localEnv };
 
   const contractId = runtimeEnv.E2E_CONTRACT_ID || env.VITE_THE_RESISTANCE_CONTRACT_ID;
   const player1Secret = runtimeEnv.E2E_PLAYER1_SECRET || env.VITE_DEV_PLAYER1_SECRET;
@@ -74,7 +85,9 @@ async function main() {
     runtimeEnv.E2E_NETWORK_PASSPHRASE || env.VITE_NETWORK_PASSPHRASE || Networks.TESTNET;
 
   if (!contractId || !player1Secret || !player2Secret) {
-    throw new Error('Missing required env keys in root .env');
+    throw new Error(
+      'Missing required env keys. Set E2E_* vars or define VITE_* values in the-resistance-frontend/.env.local'
+    );
   }
 
   const server = new rpc.Server(rpcUrl, {
