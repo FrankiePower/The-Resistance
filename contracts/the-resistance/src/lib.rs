@@ -49,8 +49,19 @@ pub const TOTAL_STARS: u32 = 200;
 /// Number of bases each player places
 pub const BASES_PER_PLAYER: u32 = 10;
 
+/// Stars per arm for Arm Strike calculation
+pub const STARS_PER_ARM: u32 = 20;
+
+/// Maximum neighbors for Deep Radar
+pub const MAX_NEIGHBORS: u32 = 20;
+
 /// TTL for game storage (30 days in ledgers)
 const GAME_TTL_LEDGERS: u32 = 518_400;
+
+// Action Types
+pub const ACTION_SOLAR_SCAN: u32 = 0;
+pub const ACTION_DEEP_RADAR: u32 = 1;
+pub const ACTION_ARM_STRIKE: u32 = 2;
 
 // ============================================================================
 // Errors
@@ -72,6 +83,9 @@ pub enum Error {
     VkParseError = 10,
     CommitmentMismatch = 11,
     GameNotReady = 12,
+    InvalidActionType = 13,
+    ArmAlreadyStruck = 14,
+    InvalidResultCount = 15,
 }
 
 // ============================================================================
@@ -91,15 +105,20 @@ pub struct Game {
     /// Poseidon hash of player2's 10 base locations
     pub player2_commitment: BytesN<32>,
 
-    /// Number of opponent bases player1 has found
+    /// Number of opponent bases player1 has found/destroyed
     pub player1_found: u32,
-    /// Number of opponent bases player2 has found
+    /// Number of opponent bases player2 has found/destroyed
     pub player2_found: u32,
 
-    /// Stars that player1 has scanned (searching for P2's bases)
+    /// Stars that player1 has scanned with Solar Scan (searching for P2's bases)
     pub player1_scanned: Vec<u32>,
-    /// Stars that player2 has scanned (searching for P1's bases)
+    /// Stars that player2 has scanned with Solar Scan (searching for P1's bases)
     pub player2_scanned: Vec<u32>,
+
+    /// Arms that player1 has struck with Arm Strike (0-9)
+    pub player1_arms_struck: Vec<u32>,
+    /// Arms that player2 has struck with Arm Strike (0-9)
+    pub player2_arms_struck: Vec<u32>,
 
     /// Whose turn is it (player1 or player2 address)
     pub current_turn: Address,
@@ -222,6 +241,8 @@ impl TheResistanceContract {
             player2_found: 0,
             player1_scanned: Vec::new(&env),
             player2_scanned: Vec::new(&env),
+            player1_arms_struck: Vec::new(&env),
+            player2_arms_struck: Vec::new(&env),
             current_turn: player1, // Player1 goes first
             winner: None,
         };
@@ -236,34 +257,53 @@ impl TheResistanceContract {
         Ok(())
     }
 
-    /// Scan a star to check if it's an opponent's base.
+    /// Execute an action against opponent's bases.
     ///
-    /// The player must provide a ZK proof that proves:
-    /// 1. They know the opponent's base commitment (matches stored hash)
-    /// 2. The target star is/isn't one of those bases
+    /// The player must provide a ZK proof that proves the result of their action.
+    ///
+    /// # Action Types:
+    /// * 0 = Solar Scan: Precision scan of a single star (returns 0 or 1)
+    /// * 1 = Deep Radar: Scan radius around star, returns count of bases nearby (0-10)
+    /// * 2 = Arm Strike: Destroy entire spiral arm, returns count destroyed (0-10)
     ///
     /// # Arguments
     /// * `session_id` - Game session ID
-    /// * `player` - Address of scanning player
-    /// * `target_star` - Star ID being scanned (0-199)
+    /// * `player` - Address of acting player
+    /// * `action_type` - Type of action (0, 1, or 2)
+    /// * `target_id` - Target star ID (0-199)
+    /// * `neighbors` - Neighbor star IDs for Deep Radar (ignored for other actions)
+    /// * `neighbor_count` - Number of valid neighbors
+    /// * `result_count` - Number of bases found/destroyed (proven by ZK circuit)
     /// * `proof_bytes` - UltraHonk proof bytes
-    /// * `is_base` - Whether the target is a base (proven by ZK circuit)
     ///
     /// # Returns
-    /// * `bool` - True if a base was found
-    pub fn scan(
+    /// * `u32` - The result count (bases found/destroyed)
+    pub fn execute_action(
         env: Env,
         session_id: u32,
         player: Address,
-        target_star: u32,
+        action_type: u32,
+        target_id: u32,
+        neighbors: Vec<u32>,
+        neighbor_count: u32,
+        result_count: u32,
         proof_bytes: Bytes,
-        is_base: bool,
-    ) -> Result<bool, Error> {
+    ) -> Result<u32, Error> {
         player.require_auth();
 
-        // Validate star ID
-        if target_star >= TOTAL_STARS {
+        // Validate action type
+        if action_type > 2 {
+            return Err(Error::InvalidActionType);
+        }
+
+        // Validate target star ID
+        if target_id >= TOTAL_STARS {
             return Err(Error::InvalidStarId);
+        }
+
+        // Validate result count (can't find more than 10 bases)
+        if result_count > BASES_PER_PLAYER {
+            return Err(Error::InvalidResultCount);
         }
 
         // Validate proof length
@@ -289,38 +329,92 @@ impl TheResistanceContract {
             return Err(Error::NotYourTurn);
         }
 
-        // Determine which player is scanning and get opponent's commitment
-        let (is_player1, opponent_commitment, scanned_list) = if player == game.player1 {
-            (true, &game.player2_commitment, &game.player1_scanned)
+        // Determine which player is acting
+        let is_player1 = if player == game.player1 {
+            true
         } else if player == game.player2 {
-            (false, &game.player1_commitment, &game.player2_scanned)
+            false
         } else {
             return Err(Error::NotPlayer);
         };
 
-        // Check star hasn't been scanned already by this player
-        for i in 0..scanned_list.len() {
-            if scanned_list.get(i).unwrap() == target_star {
-                return Err(Error::StarAlreadyScanned);
+        // Get opponent's commitment
+        let opponent_commitment = if is_player1 {
+            &game.player2_commitment
+        } else {
+            &game.player1_commitment
+        };
+
+        // Action-specific validation
+        match action_type {
+            ACTION_SOLAR_SCAN => {
+                // Check star hasn't been scanned already
+                let scanned_list = if is_player1 {
+                    &game.player1_scanned
+                } else {
+                    &game.player2_scanned
+                };
+                for i in 0..scanned_list.len() {
+                    if scanned_list.get(i).unwrap() == target_id {
+                        return Err(Error::StarAlreadyScanned);
+                    }
+                }
             }
+            ACTION_ARM_STRIKE => {
+                // Check arm hasn't been struck already
+                let arm_id = target_id / STARS_PER_ARM;
+                let arms_struck = if is_player1 {
+                    &game.player1_arms_struck
+                } else {
+                    &game.player2_arms_struck
+                };
+                for i in 0..arms_struck.len() {
+                    if arms_struck.get(i).unwrap() == arm_id {
+                        return Err(Error::ArmAlreadyStruck);
+                    }
+                }
+            }
+            _ => {} // Deep Radar has no restrictions
         }
 
         // Build public inputs for ZK verification
-        // Circuit public inputs: [bases_hash (32 bytes), target_star (32 bytes), is_base (32 bytes)]
+        // Circuit signature: (bases, bases_hash, action_type, target_id, neighbors[20], neighbor_count) -> result
         let mut public_inputs = Bytes::new(&env);
 
         // Add opponent's base commitment (32 bytes)
         public_inputs.append(&Bytes::from_array(&env, &opponent_commitment.to_array()));
 
-        // Add target_star as 32-byte field element (big-endian, left-padded)
-        let mut star_bytes = [0u8; 32];
-        star_bytes[28..32].copy_from_slice(&target_star.to_be_bytes());
-        public_inputs.append(&Bytes::from_array(&env, &star_bytes));
+        // Add action_type as 32-byte field element
+        let mut action_bytes = [0u8; 32];
+        action_bytes[28..32].copy_from_slice(&action_type.to_be_bytes());
+        public_inputs.append(&Bytes::from_array(&env, &action_bytes));
 
-        // Add is_base as 32-byte field element (0 or 1)
-        let mut is_base_bytes = [0u8; 32];
-        is_base_bytes[31] = if is_base { 1 } else { 0 };
-        public_inputs.append(&Bytes::from_array(&env, &is_base_bytes));
+        // Add target_id as 32-byte field element
+        let mut target_bytes = [0u8; 32];
+        target_bytes[28..32].copy_from_slice(&target_id.to_be_bytes());
+        public_inputs.append(&Bytes::from_array(&env, &target_bytes));
+
+        // Add neighbors array (20 x 32 bytes)
+        for i in 0..MAX_NEIGHBORS {
+            let neighbor_val = if i < neighbor_count && (i as u32) < neighbors.len() {
+                neighbors.get(i).unwrap_or(0)
+            } else {
+                0
+            };
+            let mut neighbor_bytes = [0u8; 32];
+            neighbor_bytes[28..32].copy_from_slice(&neighbor_val.to_be_bytes());
+            public_inputs.append(&Bytes::from_array(&env, &neighbor_bytes));
+        }
+
+        // Add neighbor_count as 32-byte field element
+        let mut count_bytes = [0u8; 32];
+        count_bytes[28..32].copy_from_slice(&neighbor_count.to_be_bytes());
+        public_inputs.append(&Bytes::from_array(&env, &count_bytes));
+
+        // Add result_count as 32-byte field element (circuit output)
+        let mut result_bytes = [0u8; 32];
+        result_bytes[28..32].copy_from_slice(&result_count.to_be_bytes());
+        public_inputs.append(&Bytes::from_array(&env, &result_bytes));
 
         // Get verification key and verify proof
         let vk_bytes: Bytes = env
@@ -336,33 +430,47 @@ impl TheResistanceContract {
             .verify(&proof_bytes, &public_inputs)
             .map_err(|_| Error::ProofVerificationFailed)?;
 
-        // Proof verified! Update game state
-        if is_player1 {
-            game.player1_scanned.push_back(target_star);
-            if is_base {
-                game.player1_found += 1;
+        // Proof verified! Update game state based on action type
+        match action_type {
+            ACTION_SOLAR_SCAN => {
+                // Record the scanned star
+                if is_player1 {
+                    game.player1_scanned.push_back(target_id);
+                    game.player1_found += result_count; // 0 or 1
+                } else {
+                    game.player2_scanned.push_back(target_id);
+                    game.player2_found += result_count;
+                }
             }
-            // Check win condition
-            if game.player1_found >= BASES_PER_PLAYER {
-                game.winner = Some(game.player1.clone());
-            } else {
-                game.current_turn = game.player2.clone();
+            ACTION_DEEP_RADAR => {
+                // Radar just reveals count, doesn't destroy bases
+                // No state change needed (result is returned to UI)
             }
-        } else {
-            game.player2_scanned.push_back(target_star);
-            if is_base {
-                game.player2_found += 1;
+            ACTION_ARM_STRIKE => {
+                // Record the struck arm and add destroyed bases
+                let arm_id = target_id / STARS_PER_ARM;
+                if is_player1 {
+                    game.player1_arms_struck.push_back(arm_id);
+                    game.player1_found += result_count; // 0 to 10
+                } else {
+                    game.player2_arms_struck.push_back(arm_id);
+                    game.player2_found += result_count;
+                }
             }
-            // Check win condition
-            if game.player2_found >= BASES_PER_PLAYER {
-                game.winner = Some(game.player2.clone());
-            } else {
-                game.current_turn = game.player1.clone();
-            }
+            _ => {}
         }
 
-        // If game ended, notify GameHub
-        if let Some(ref winner) = game.winner {
+        // Check win condition (found all 10 opponent bases)
+        let found_count = if is_player1 {
+            game.player1_found
+        } else {
+            game.player2_found
+        };
+
+        if found_count >= BASES_PER_PLAYER {
+            game.winner = Some(player.clone());
+
+            // Notify GameHub
             let game_hub_addr: Address = env
                 .storage()
                 .instance()
@@ -370,8 +478,16 @@ impl TheResistanceContract {
                 .expect("GameHub not set");
 
             let game_hub = GameHubClient::new(&env, &game_hub_addr);
-            let player1_won = *winner == game.player1;
-            game_hub.end_game(&session_id, &player1_won);
+            game_hub.end_game(&session_id, &is_player1);
+        } else {
+            // Switch turns (except for Deep Radar which doesn't consume turn)
+            if action_type != ACTION_DEEP_RADAR {
+                game.current_turn = if is_player1 {
+                    game.player2.clone()
+                } else {
+                    game.player1.clone()
+                };
+            }
         }
 
         // Save updated game state
@@ -379,6 +495,33 @@ impl TheResistanceContract {
         env.storage()
             .temporary()
             .extend_ttl(&key, GAME_TTL_LEDGERS, GAME_TTL_LEDGERS);
+
+        Ok(result_count)
+    }
+
+    /// Legacy scan function for backwards compatibility (Solar Scan only)
+    pub fn scan(
+        env: Env,
+        session_id: u32,
+        player: Address,
+        target_star: u32,
+        proof_bytes: Bytes,
+        is_base: bool,
+    ) -> Result<bool, Error> {
+        let result_count = if is_base { 1 } else { 0 };
+        let neighbors = Vec::new(&env);
+
+        Self::execute_action(
+            env,
+            session_id,
+            player,
+            ACTION_SOLAR_SCAN,
+            target_star,
+            neighbors,
+            0,
+            result_count,
+            proof_bytes,
+        )?;
 
         Ok(is_base)
     }
