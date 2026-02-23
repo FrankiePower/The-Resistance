@@ -1,6 +1,7 @@
-# The Resistance:- Gameplay Design
+# The Resistance: Gameplay Design
 
-## Current Implementation (V1 - Hackathon MVP)
+## Legacy Implementation (V1 - Hackathon MVP)
+This section documents the original Battleship-style MVP. It is kept for reference and may differ from the current design in `GAME_DESIGN.md`.
 
 ### Core Mechanics
 - **200 stars** in the galaxy
@@ -19,6 +20,7 @@
 ---
 
 ## Design Ideas (Post-Hackathon)
+These ideas are not implemented yet. Use them to drive future iterations after the current 3D/ZK flow is stable.
 
 ### Time Pressure
 - Add game timer (e.g., 5-10 minutes)

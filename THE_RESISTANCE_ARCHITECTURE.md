@@ -1,4 +1,6 @@
-r# The Resistance - ZK-Powered Space Combat Game
+# The Resistance - Legacy Architecture (Battleship-Style MVP)
+
+This document describes an early Battleship-style concept. The current design is in `GAME_DESIGN.md`.
 
 ## 🎯 Game Overview
 

@@ -1,4 +1,7 @@
-# THE RESISTANCE:
+# THE RESISTANCE
+
+## Current Design (V2)
+This is the active design target. The legacy MVP spec is in `GAMEPLAY.md`.
 
 ## Game Overview
 
@@ -107,7 +110,7 @@ With ZK:
 │                         ARCHITECTURE                                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  FRONTEND (Next.js + React Three Fiber)                                 │
+│  FRONTEND (React + React Three Fiber)                                   │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │ • 3D Galaxy visualization (existing code)                        │    │
 │  │ • Game HUD (intel panel, action buttons, battle log)            │    │
@@ -137,10 +140,10 @@ With ZK:
 │  │ └─────────────────────────────────────────────────────────────┘ │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
-│  ZK CIRCUIT (Circom)                                                     │
+│  ZK CIRCUIT (Noir)                                                       │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │ • base_check.circom - proves base membership                    │    │
-│  │ • Compiled to WASM for browser proving                          │    │
+│  │ • base_check.nr - proves base membership                         │    │
+│  │ • Compiled for browser proving                                  │    │
 │  │ • Verification key embedded in contract                         │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │

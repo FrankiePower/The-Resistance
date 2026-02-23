@@ -1,5 +1,7 @@
 # Final Run Log (The Resistance)
 
+This is an operational build log. Keep entries short and dated so it stays useful.
+
 This file tracks successful recovery/build steps so we can move fast and keep one source of truth.
 
 ## 2026-02-23 - Success #1: Fresh Noir + Circuit Regeneration
@@ -86,3 +88,58 @@ That circuit defines your game rule proof:
 
 ### In one sentence
 - `nargo` builds/runs your circuit, and `bb` proves/verifies it using that circuit.
+
+## 2026-02-23 - Success #3: Pinned Toolchain Compatibility Restored
+
+- Goal: Restore verifier-compatible artifact format by pinning toolchain versions expected by on-chain verifier.
+- Status: `SUCCESS`
+
+### Versions pinned
+- `nargo/noirc`: `1.0.0-beta.9`
+- `bb`: `v0.87.0`
+
+### Resulting artifacts (compatible layout)
+- `circuits/target/proof`: `14592` bytes
+- `circuits/target/vk`: `1760` bytes
+- `circuits/target/public_inputs`: `800` bytes
+
+### Verification
+- `cargo test --manifest-path contracts/the-resistance/Cargo.toml --test verifier_compat -- --ignored --nocapture`
+- Result: `ok` (proof verifies with `UltraHonkVerifier`)
+
+## 2026-02-23 - Final End-to-End On-Chain Attempt (Pinned Stack)
+
+- Goal: Deploy contract with compatible VK and execute real on-chain `execute_action`.
+- Status: `FAILED (budget limit)`
+
+### Deploy
+- New contract: `CDFYOLAGRFDR7OTC735WNS5SS77TZASIO4JQ7EDNVDPHX4DKYVL63VVA`
+- Deploy tx: `4c9192572e5a4bf8b9188eee3cb655dcb8441eec8572334cb607ef5a346ded31`
+
+### E2E run
+- `start_game` tx: `b7beb670196d65dce3ef3f2ec187d268e419ee3f4ac90b91fc207d54185655bb`
+- Proof submitted: `14592` bytes (expected format)
+- `execute_action` simulation error:
+  - `HostError: Error(Budget, ExceededLimit)`
+
+### Conclusion
+- VK/proof format mismatch was fixed.
+- Remaining blocker is Soroban testnet compute budget during on-chain UltraHonk verify in `execute_action`.
+
+## 2026-02-23 - Local Unlimited E2E Script Added
+
+- Goal: Mirror Clash-of-pirates local workaround with one-command localnet flow.
+- Status: `SCRIPT READY`
+
+### Script
+- `scripts/run-localnet-unlimited-e2e.sh`
+
+### What it does
+1. Starts Stellar quickstart local container with `--limits unlimited`
+2. Creates/funds 2 local player accounts
+3. Rebuilds circuit artifacts with pinned compatible toolchain (`nargo beta.9`, `bb v0.87.0`)
+4. Builds and deploys `mock-game-hub` + `the-resistance` with VK
+5. Runs full `start_game -> execute_action` E2E proof flow locally
+
+### Local machine requirement
+- Docker daemon must be running (`/var/run/docker.sock` accessible).

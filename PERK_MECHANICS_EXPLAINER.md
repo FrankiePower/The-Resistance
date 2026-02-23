@@ -1,12 +1,12 @@
-# Strategic Perks: The New Resistance Mechanics
+# Strategic Perks: Concept Draft (Not Implemented)
 
-To make *The Resistance* more adrenaline-pumping and strategic, we have evolved the game from a blind guessing "Battleship" copy into a dynamic, tactical war game. 
+This document outlines **future** mechanics for *The Resistance*. These are exploratory ideas and are **not** implemented in the current build. Use as inspiration when revisiting gameplay depth after the core loop is stable.
 
-We achieved this by upgrading the Zero-Knowledge (ZK) Noir circuit to support **Action Types**. Instead of just firing blind, you now have a command arsenal. 
+The proposal upgrades the ZK circuit to support **Action Types** instead of a single hit/miss action.
 
 ---
 
-## 🚀 The Three Arsenal Commands
+## The Three Arsenal Commands
 
 Before the game starts, you commit to 10 secret base locations. During your turn, you can choose to execute one of the following commands against enemy space.
 
@@ -32,7 +32,7 @@ Before the game starts, you commit to 10 secret base locations. During your turn
 
 ---
 
-## 🧠 How the ZK Circuit Works Under the Hood
+## How the ZK Circuit Works Under the Hood
 
 The magic of *The Resistance* is that your opponent’s browser has to prove the result of your attack without revealing where their remaining bases are.
 
@@ -50,7 +50,7 @@ Because this happens inside a ZK Snark, the attacker gets the verified number on
 
 ---
 
-## 🎨 Recommended UI Upgrades
+## Recommended UI Upgrades
 To make this fun, the frontend should react wildly to these actions:
 * **Suspense Delay:** When an action is taken, delay the result by 2-3 seconds while the ZK proof is "generating". Play a tension-building sound effect.
 * **Radar Reveal:** Make the Radar Sweep feel analytical. Show hex grids scanning.
