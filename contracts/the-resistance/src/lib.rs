@@ -63,6 +63,9 @@ pub const ACTION_SOLAR_SCAN: u32 = 0;
 pub const ACTION_DEEP_RADAR: u32 = 1;
 pub const ACTION_ARM_STRIKE: u32 = 2;
 
+/// Toggle for on-chain proof verification.
+const VERIFY_ZK_PROOFS: bool = true;
+
 // ============================================================================
 // Errors
 // ============================================================================
@@ -291,25 +294,7 @@ impl TheResistanceContract {
     ) -> Result<u32, Error> {
         player.require_auth();
 
-        // Validate action type
-        if action_type > 2 {
-            return Err(Error::InvalidActionType);
-        }
-
-        // Validate target star ID
-        if target_id >= TOTAL_STARS {
-            return Err(Error::InvalidStarId);
-        }
-
-        // Validate result count (can't find more than 10 bases)
-        if result_count > BASES_PER_PLAYER {
-            return Err(Error::InvalidResultCount);
-        }
-
-        // Validate proof length
-        if proof_bytes.len() as usize != PROOF_BYTES {
-            return Err(Error::InvalidProof);
-        }
+        Self::validate_action_inputs(action_type, target_id, result_count, &proof_bytes)?;
 
         // Get game
         let key = DataKey::Game(session_id);
@@ -319,24 +304,9 @@ impl TheResistanceContract {
             .get(&key)
             .ok_or(Error::GameNotFound)?;
 
-        // Check game not ended
-        if game.winner.is_some() {
-            return Err(Error::GameAlreadyEnded);
-        }
-
-        // Check it's this player's turn
-        if game.current_turn != player {
-            return Err(Error::NotYourTurn);
-        }
-
-        // Determine which player is acting
-        let is_player1 = if player == game.player1 {
-            true
-        } else if player == game.player2 {
-            false
-        } else {
-            return Err(Error::NotPlayer);
-        };
+        Self::validate_game_access(&game, &player)?;
+        let is_player1 = Self::determine_player_side(&game, &player)?;
+        Self::validate_action_specific(&game, is_player1, action_type, target_id)?;
 
         // Get opponent's commitment
         let opponent_commitment = if is_player1 {
@@ -345,10 +315,78 @@ impl TheResistanceContract {
             &game.player1_commitment
         };
 
-        // Action-specific validation
+        let public_inputs = Self::build_public_inputs(
+            &env,
+            opponent_commitment,
+            action_type,
+            target_id,
+            &neighbors,
+            neighbor_count,
+            result_count,
+        );
+
+        Self::verify_action_proof(&env, &proof_bytes, &public_inputs)?;
+        Self::apply_action_result(&mut game, is_player1, action_type, target_id, result_count);
+        Self::finalize_turn_or_end_game(&env, &mut game, session_id, &player, is_player1, action_type);
+
+        // Save updated game state
+        env.storage().temporary().set(&key, &game);
+        env.storage()
+            .temporary()
+            .extend_ttl(&key, GAME_TTL_LEDGERS, GAME_TTL_LEDGERS);
+
+        Ok(result_count)
+    }
+
+    fn validate_action_inputs(
+        action_type: u32,
+        target_id: u32,
+        result_count: u32,
+        proof_bytes: &Bytes,
+    ) -> Result<(), Error> {
+        if action_type > 2 {
+            return Err(Error::InvalidActionType);
+        }
+        if target_id >= TOTAL_STARS {
+            return Err(Error::InvalidStarId);
+        }
+        if result_count > BASES_PER_PLAYER {
+            return Err(Error::InvalidResultCount);
+        }
+        if proof_bytes.len() as usize != PROOF_BYTES {
+            return Err(Error::InvalidProof);
+        }
+        Ok(())
+    }
+
+    fn validate_game_access(game: &Game, player: &Address) -> Result<(), Error> {
+        if game.winner.is_some() {
+            return Err(Error::GameAlreadyEnded);
+        }
+        if &game.current_turn != player {
+            return Err(Error::NotYourTurn);
+        }
+        Ok(())
+    }
+
+    fn determine_player_side(game: &Game, player: &Address) -> Result<bool, Error> {
+        if &game.player1 == player {
+            Ok(true)
+        } else if &game.player2 == player {
+            Ok(false)
+        } else {
+            Err(Error::NotPlayer)
+        }
+    }
+
+    fn validate_action_specific(
+        game: &Game,
+        is_player1: bool,
+        action_type: u32,
+        target_id: u32,
+    ) -> Result<(), Error> {
         match action_type {
             ACTION_SOLAR_SCAN => {
-                // Check star hasn't been scanned already
                 let scanned_list = if is_player1 {
                     &game.player1_scanned
                 } else {
@@ -359,9 +397,9 @@ impl TheResistanceContract {
                         return Err(Error::StarAlreadyScanned);
                     }
                 }
+                Ok(())
             }
             ACTION_ARM_STRIKE => {
-                // Check arm hasn't been struck already
                 let arm_id = target_id / STARS_PER_ARM;
                 let arms_struck = if is_player1 {
                     &game.player1_arms_struck
@@ -373,28 +411,35 @@ impl TheResistanceContract {
                         return Err(Error::ArmAlreadyStruck);
                     }
                 }
+                Ok(())
             }
-            _ => {} // Deep Radar has no restrictions
+            _ => Ok(()),
         }
+    }
 
-        // Build public inputs for ZK verification
-        // Circuit signature: (bases, bases_hash, action_type, target_id, neighbors[20], neighbor_count) -> result
-        let mut public_inputs = Bytes::new(&env);
+    fn build_public_inputs(
+        env: &Env,
+        opponent_commitment: &BytesN<32>,
+        action_type: u32,
+        target_id: u32,
+        neighbors: &Vec<u32>,
+        neighbor_count: u32,
+        result_count: u32,
+    ) -> Bytes {
+        let mut public_inputs = Bytes::new(env);
 
-        // Add opponent's base commitment (32 bytes)
-        public_inputs.append(&Bytes::from_array(&env, &opponent_commitment.to_array()));
+        // Circuit public inputs layout:
+        // bases_hash, action_type, target_id, neighbors[20], neighbor_count, result
+        public_inputs.append(&Bytes::from_array(env, &opponent_commitment.to_array()));
 
-        // Add action_type as 32-byte field element
         let mut action_bytes = [0u8; 32];
         action_bytes[28..32].copy_from_slice(&action_type.to_be_bytes());
-        public_inputs.append(&Bytes::from_array(&env, &action_bytes));
+        public_inputs.append(&Bytes::from_array(env, &action_bytes));
 
-        // Add target_id as 32-byte field element
         let mut target_bytes = [0u8; 32];
         target_bytes[28..32].copy_from_slice(&target_id.to_be_bytes());
-        public_inputs.append(&Bytes::from_array(&env, &target_bytes));
+        public_inputs.append(&Bytes::from_array(env, &target_bytes));
 
-        // Add neighbors array (20 x 32 bytes)
         for i in 0..MAX_NEIGHBORS {
             let neighbor_val = if i < neighbor_count && (i as u32) < neighbors.len() {
                 neighbors.get(i).unwrap_or(0)
@@ -403,55 +448,66 @@ impl TheResistanceContract {
             };
             let mut neighbor_bytes = [0u8; 32];
             neighbor_bytes[28..32].copy_from_slice(&neighbor_val.to_be_bytes());
-            public_inputs.append(&Bytes::from_array(&env, &neighbor_bytes));
+            public_inputs.append(&Bytes::from_array(env, &neighbor_bytes));
         }
 
-        // Add neighbor_count as 32-byte field element
         let mut count_bytes = [0u8; 32];
         count_bytes[28..32].copy_from_slice(&neighbor_count.to_be_bytes());
-        public_inputs.append(&Bytes::from_array(&env, &count_bytes));
+        public_inputs.append(&Bytes::from_array(env, &count_bytes));
 
-        // Add result_count as 32-byte field element (circuit output)
         let mut result_bytes = [0u8; 32];
         result_bytes[28..32].copy_from_slice(&result_count.to_be_bytes());
-        public_inputs.append(&Bytes::from_array(&env, &result_bytes));
+        public_inputs.append(&Bytes::from_array(env, &result_bytes));
 
-        // Get verification key and verify proof
+        public_inputs
+    }
+
+    fn verify_action_proof(
+        env: &Env,
+        proof_bytes: &Bytes,
+        public_inputs: &Bytes,
+    ) -> Result<(), Error> {
+        if !VERIFY_ZK_PROOFS {
+            return Ok(());
+        }
+
         let vk_bytes: Bytes = env
             .storage()
             .instance()
             .get(&DataKey::VerificationKey)
             .ok_or(Error::VkNotSet)?;
 
-        let verifier =
-            UltraHonkVerifier::new(&env, &vk_bytes).map_err(|_| Error::VkParseError)?;
-
+        let verifier = UltraHonkVerifier::new(env, &vk_bytes).map_err(|_| Error::VkParseError)?;
         verifier
-            .verify(&proof_bytes, &public_inputs)
+            .verify(proof_bytes, public_inputs)
             .map_err(|_| Error::ProofVerificationFailed)?;
 
-        // Proof verified! Update game state based on action type
+        Ok(())
+    }
+
+    fn apply_action_result(
+        game: &mut Game,
+        is_player1: bool,
+        action_type: u32,
+        target_id: u32,
+        result_count: u32,
+    ) {
         match action_type {
             ACTION_SOLAR_SCAN => {
-                // Record the scanned star
                 if is_player1 {
                     game.player1_scanned.push_back(target_id);
-                    game.player1_found += result_count; // 0 or 1
+                    game.player1_found += result_count;
                 } else {
                     game.player2_scanned.push_back(target_id);
                     game.player2_found += result_count;
                 }
             }
-            ACTION_DEEP_RADAR => {
-                // Radar just reveals count, doesn't destroy bases
-                // No state change needed (result is returned to UI)
-            }
+            ACTION_DEEP_RADAR => {}
             ACTION_ARM_STRIKE => {
-                // Record the struck arm and add destroyed bases
                 let arm_id = target_id / STARS_PER_ARM;
                 if is_player1 {
                     game.player1_arms_struck.push_back(arm_id);
-                    game.player1_found += result_count; // 0 to 10
+                    game.player1_found += result_count;
                 } else {
                     game.player2_arms_struck.push_back(arm_id);
                     game.player2_found += result_count;
@@ -459,8 +515,16 @@ impl TheResistanceContract {
             }
             _ => {}
         }
+    }
 
-        // Check win condition (found all 10 opponent bases)
+    fn finalize_turn_or_end_game(
+        env: &Env,
+        game: &mut Game,
+        session_id: u32,
+        player: &Address,
+        is_player1: bool,
+        action_type: u32,
+    ) {
         let found_count = if is_player1 {
             game.player1_found
         } else {
@@ -470,33 +534,24 @@ impl TheResistanceContract {
         if found_count >= BASES_PER_PLAYER {
             game.winner = Some(player.clone());
 
-            // Notify GameHub
             let game_hub_addr: Address = env
                 .storage()
                 .instance()
                 .get(&DataKey::GameHubAddress)
                 .expect("GameHub not set");
-
-            let game_hub = GameHubClient::new(&env, &game_hub_addr);
+            let game_hub = GameHubClient::new(env, &game_hub_addr);
             game_hub.end_game(&session_id, &is_player1);
-        } else {
-            // Switch turns (except for Deep Radar which doesn't consume turn)
-            if action_type != ACTION_DEEP_RADAR {
-                game.current_turn = if is_player1 {
-                    game.player2.clone()
-                } else {
-                    game.player1.clone()
-                };
-            }
+            return;
         }
 
-        // Save updated game state
-        env.storage().temporary().set(&key, &game);
-        env.storage()
-            .temporary()
-            .extend_ttl(&key, GAME_TTL_LEDGERS, GAME_TTL_LEDGERS);
-
-        Ok(result_count)
+        // Deep radar does not consume turn.
+        if action_type != ACTION_DEEP_RADAR {
+            game.current_turn = if is_player1 {
+                game.player2.clone()
+            } else {
+                game.player1.clone()
+            };
+        }
     }
 
     /// Legacy scan function for backwards compatibility (Solar Scan only)

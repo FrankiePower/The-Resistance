@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { ActionType } from './zkUtils';
 import { useWallet } from '@/hooks/useWallet';
-import { DevWalletService } from '@/services/devWalletService';
+import { devWalletService, DevWalletService } from '@/services/devWalletService';
 import { GalaxyGrid } from './components/GalaxyGrid';
 import { GameHeader } from './components/GameHeader';
 import { BaseSelector } from './components/BaseSelector';
@@ -14,6 +14,9 @@ import {
   ACTION_DEEP_RADAR,
   ACTION_ARM_STRIKE,
 } from './zkUtils';
+import { TheResistanceService, hashToBuffer } from './theResistanceService';
+import { THE_RESISTANCE_CONTRACT } from '@/utils/constants';
+import { RPC_URL } from '@/utils/constants';
 import { useGameStore, StarStatus } from '../../store/gameStore';
 import { X } from 'lucide-react';
 
@@ -64,7 +67,18 @@ export function TheResistanceGame({
   onStandingsRefresh,
   onGameComplete
 }: TheResistanceGameProps) {
-  const { walletType } = useWallet();
+  const explorerTxBase = useMemo(() => {
+    const rpc = RPC_URL.toLowerCase();
+    if (rpc.includes('localhost') || rpc.includes('127.0.0.1')) return null;
+    if (rpc.includes('testnet')) return 'https://stellar.expert/explorer/testnet/tx/';
+    return 'https://stellar.expert/explorer/public/tx/';
+  }, []);
+
+  const { walletType, getContractSigner } = useWallet();
+  const resistanceService = useMemo(
+    () => new TheResistanceService(THE_RESISTANCE_CONTRACT),
+    []
+  );
 
   // Game state
   const [sessionId, setSessionId] = useState<number>(() => initialSessionId || createRandomSessionId());
@@ -76,6 +90,8 @@ export function TheResistanceGame({
   const [opponentFoundCount, setOpponentFoundCount] = useState(0);
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
+  const [player1Address, setPlayer1Address] = useState<string | null>(null);
+  const [player2Address, setPlayer2Address] = useState<string | null>(null);
 
   // Simulated opponent bases (for demo - in production, opponent commits their own bases)
   const [simulatedOpponentBases, setSimulatedOpponentBases] = useState<number[]>([]);
@@ -86,6 +102,7 @@ export function TheResistanceGame({
   const [scanningStarId, setScanningStarId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [startGameTxHash, setStartGameTxHash] = useState<string | null>(null);
   const hoveredStarId = useGameStore(state => state.hoveredStarId);
   const clickedStarId = useGameStore(state => state.clickedStarId);
   const setClickedStarId = useGameStore(state => state.setClickedStarId);
@@ -136,6 +153,35 @@ export function TheResistanceGame({
     return scanned;
   }, [myScans]);
 
+  const syncGameFromChain = useCallback(async () => {
+    if (!sessionId) return;
+
+    try {
+      const game = await resistanceService.getGame(sessionId);
+      if (!game) return;
+
+      setPlayer1Address(game.player1);
+      setPlayer2Address(game.player2);
+      setIsMyTurn(game.current_turn === userAddress);
+
+      if (userAddress === game.player1) {
+        setMyFoundCount(Number(game.player1_found));
+        setOpponentFoundCount(Number(game.player2_found));
+      } else if (userAddress === game.player2) {
+        setMyFoundCount(Number(game.player2_found));
+        setOpponentFoundCount(Number(game.player1_found));
+      }
+
+      if (game.winner) {
+        setWinner(game.winner);
+        setGamePhase('complete');
+        onGameComplete();
+      }
+    } catch (err) {
+      console.warn('[Game] Failed to sync on-chain game state:', err);
+    }
+  }, [resistanceService, sessionId, userAddress, setGamePhase, onGameComplete]);
+
   // Auto-hide sidebar during gameplay for immersion, but allow toggling
   useEffect(() => {
     if (gamePhase === 'playing') {
@@ -161,6 +207,15 @@ export function TheResistanceGame({
       return () => clearInterval(timer);
     }
   }, [gamePhase, timeRemaining, winner, setTimeRemaining]);
+
+  useEffect(() => {
+    if (gamePhase !== 'playing') return;
+    syncGameFromChain();
+    const poll = setInterval(() => {
+      syncGameFromChain();
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [gamePhase, syncGameFromChain]);
 
   // Sync star states to store for 3D UI
   useEffect(() => {
@@ -219,8 +274,17 @@ export function TheResistanceGame({
 
     setLoading(true);
     setError(null);
+    setStartGameTxHash(null);
 
     try {
+      if (!THE_RESISTANCE_CONTRACT) {
+        throw new Error('Missing contract ID. Run bun run setup first.');
+      }
+
+      if (!DevWalletService.isDevModeAvailable() || !DevWalletService.isPlayerAvailable(1) || !DevWalletService.isPlayerAvailable(2)) {
+        throw new Error('Quickstart requires both dev wallets. Run "bun run setup" first.');
+      }
+
       // Hash the bases using Poseidon2
       const basesArray = Array.from(selectedBases).sort((a, b) => a - b);
       const commitment = await hashBases(basesArray);
@@ -245,18 +309,54 @@ export function TheResistanceGame({
       console.log('[Game] Your bases:', basesArray);
       console.log('[Game] Opponent bases (simulated):', opponentBasesArray);
 
-      // TODO: Create game on-chain with this commitment
-      // For now, move to waiting phase
-      setSuccess('Bases committed! Waiting for opponent...');
-      setGamePhase('waiting');
+      const originalPlayer = devWalletService.getCurrentPlayer();
+      let player1AddressQuickstart = '';
+      let player2AddressQuickstart = '';
+      let player1Signer: ReturnType<typeof devWalletService.getSigner> | null = null;
+      let player2Signer: ReturnType<typeof devWalletService.getSigner> | null = null;
 
-      // Simulate opponent joining (remove in production)
-      setTimeout(() => {
-        setGamePhase('playing');
-        setTimeRemaining(600); // Reset timer to 10 minutes
-        setIsMyTurn(true);
-        setSuccess('Game started! Your turn to scan.');
-      }, 2000);
+      try {
+        await devWalletService.initPlayer(1);
+        player1AddressQuickstart = devWalletService.getPublicKey();
+        player1Signer = devWalletService.getSigner();
+
+        await devWalletService.initPlayer(2);
+        player2AddressQuickstart = devWalletService.getPublicKey();
+        player2Signer = devWalletService.getSigner();
+      } finally {
+        if (originalPlayer) {
+          await devWalletService.initPlayer(originalPlayer);
+        }
+      }
+
+      if (!player1Signer || !player2Signer) {
+        throw new Error('Failed to initialize dev-wallet signers for both players');
+      }
+
+      setPlayer1Address(player1AddressQuickstart);
+      setPlayer2Address(player2AddressQuickstart);
+      setGamePhase('waiting');
+      setSuccess('Creating game on-chain...');
+
+      const stake = 10_000_000n;
+      const { txHash } = await resistanceService.startGameQuickstart(
+        sessionId,
+        player1AddressQuickstart,
+        player2AddressQuickstart,
+        stake,
+        stake,
+        hashToBuffer(commitment),
+        hashToBuffer(opponentCommitment),
+        player1Signer,
+        player2Signer
+      );
+      setStartGameTxHash(txHash);
+
+      setGamePhase('playing');
+      setTimeRemaining(600);
+      await syncGameFromChain();
+      onStandingsRefresh();
+      setSuccess('Game started on-chain. Switch dev wallet player to take turns.');
 
     } catch (err) {
       setError(`Failed to commit bases: ${err}`);
@@ -323,9 +423,24 @@ export function TheResistanceGame({
         neighbors,
       });
 
-      console.log('[Game] Proof generated, result:', proof.resultCount);
+      console.log('[Game] Proof generated, local result:', proof.resultCount);
 
-      const countFound = proof.resultCount;
+      const signer = getContractSigner();
+      const onChainCount = await resistanceService.executeAction(
+        sessionId,
+        userAddress,
+        selectedAction,
+        starId,
+        neighbors,
+        neighbors.length,
+        proof.resultCount,
+        proof.proofBytes,
+        signer
+      );
+
+      console.log('[Game] On-chain execute_action result:', onChainCount);
+
+      const countFound = Number(onChainCount);
       const isBase = countFound > 0;
 
       const result: ScanResult = {
@@ -341,47 +456,21 @@ export function TheResistanceGame({
       // Handle results based on action type
       if (selectedAction === ACTION_DEEP_RADAR) {
         setSuccess(`[RADAR LOG] Scan complete at Star ${starId}. Detected ${countFound} enemy signatures in local proximity.`);
-        // Deep Radar doesn't switch turns
       } else if (selectedAction === ACTION_ARM_STRIKE) {
-        const newCount = myFoundCount + countFound;
-        setMyFoundCount(newCount);
         const armNames = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"];
         const armName = armNames[Math.floor(starId / STARS_PER_ARM)] || "Unknown";
-
-        setSuccess(`[SUPERWEAPON TRIGGERED] Galactic Arm ${armName} incinerated! ${countFound} Enemy Bases destroyed in the blast. (${newCount}/${BASES_PER_PLAYER})`);
-
-        if (newCount >= BASES_PER_PLAYER) {
-          setWinner(userAddress);
-          setGamePhase('complete');
-          onGameComplete();
-          return;
-        }
-
-        // Switch turns
-        setIsMyTurn(false);
-        setTimeout(() => simulateOpponentTurn(), 1500);
+        setSuccess(`[SUPERWEAPON TRIGGERED] Galactic Arm ${armName} incinerated! ${countFound} enemy bases destroyed.`);
 
       } else {
-        // Solar Scan
         if (isBase) {
-          const newCount = myFoundCount + 1;
-          setMyFoundCount(newCount);
-          setSuccess(`HIT! Found enemy base at Star ${starId}! (${newCount}/${BASES_PER_PLAYER})`);
-
-          if (newCount >= BASES_PER_PLAYER) {
-            setWinner(userAddress);
-            setGamePhase('complete');
-            onGameComplete();
-            return;
-          }
+          setSuccess(`HIT! Found enemy base at Star ${starId}!`);
         } else {
           setSuccess(`Miss. No base at Star ${starId}.`);
         }
-
-        // Switch turns
-        setIsMyTurn(false);
-        setTimeout(() => simulateOpponentTurn(), 1500);
       }
+
+      await syncGameFromChain();
+      onStandingsRefresh();
 
     } catch (err) {
       console.error('[Game] Scan failed:', err);
@@ -452,6 +541,9 @@ export function TheResistanceGame({
     setOpponentFoundCount(0);
     setIsMyTurn(false);
     setWinner(null);
+    setPlayer1Address(null);
+    setPlayer2Address(null);
+    setStartGameTxHash(null);
     setError(null);
     setSuccess(null);
     setTimeRemaining(300);
@@ -501,7 +593,23 @@ export function TheResistanceGame({
 
             {success && (
               <div className="bg-green-500/10 border border-green-500/50 text-green-500 px-4 py-2 rounded-lg">
-                {success}
+                <div>{success}</div>
+                {startGameTxHash && (
+                  <div className="mt-2 text-xs">
+                    {explorerTxBase ? (
+                      <a
+                        href={`${explorerTxBase}${startGameTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-300 underline"
+                      >
+                        Start game tx
+                      </a>
+                    ) : (
+                      <span className="text-emerald-300">Start game tx: {startGameTxHash}</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

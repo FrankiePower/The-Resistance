@@ -4,8 +4,8 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  // Load .env files from the parent directory (repo root)
-  envDir: '..',
+  // Standalone frontend should read its own .env/.env.local.
+  envDir: '.',
   define: {
     global: 'globalThis'
   },

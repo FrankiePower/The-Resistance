@@ -4,13 +4,21 @@
  */
 
 import { Client as TheResistanceClient, type Game } from './bindings';
-import { NETWORK_PASSPHRASE, RPC_URL, DEFAULT_METHOD_OPTIONS, DEFAULT_AUTH_TTL_MINUTES } from '@/utils/constants';
-import { contract } from '@stellar/stellar-sdk';
+import {
+  NETWORK_PASSPHRASE,
+  RPC_URL,
+  DEFAULT_METHOD_OPTIONS,
+  DEFAULT_AUTH_TTL_MINUTES,
+  MULTI_SIG_AUTH_TTL_MINUTES,
+} from '@/utils/constants';
+import { Address, authorizeEntry, contract } from '@stellar/stellar-sdk';
 import { Buffer } from 'buffer';
 import { signAndSendViaLaunchtube } from '@/utils/transactionHelper';
 import { calculateValidUntilLedger } from '@/utils/ledgerUtils';
+import { injectSignedAuthEntry } from '@/utils/authEntryUtils';
 
 type ClientOptions = contract.ClientOptions;
+const ALLOW_HTTP = RPC_URL.startsWith('http://');
 
 /**
  * Service for interacting with The Resistance game contract
@@ -21,11 +29,17 @@ export class TheResistanceService {
 
   constructor(contractId: string) {
     this.contractId = contractId;
+    console.log('[TheResistanceService] Config', {
+      rpcUrl: RPC_URL,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      contractId: this.contractId,
+    });
     // Base client for read-only operations
     this.baseClient = new TheResistanceClient({
       contractId: this.contractId,
       networkPassphrase: NETWORK_PASSPHRASE,
       rpcUrl: RPC_URL,
+      allowHttp: ALLOW_HTTP,
     });
   }
 
@@ -40,6 +54,7 @@ export class TheResistanceService {
       contractId: this.contractId,
       networkPassphrase: NETWORK_PASSPHRASE,
       rpcUrl: RPC_URL,
+      allowHttp: ALLOW_HTTP,
       publicKey,
       ...signer,
     };
@@ -106,6 +121,128 @@ export class TheResistanceService {
   }
 
   /**
+   * Quickstart flow for local dev:
+   * Sign Player 1 auth entry, inject into Player 2 transaction, then submit.
+   */
+  async startGameQuickstart(
+    sessionId: number,
+    player1: string,
+    player2: string,
+    player1Points: bigint,
+    player2Points: bigint,
+    player1Commitment: Buffer,
+    player2Commitment: Buffer,
+    player1Signer: Pick<contract.ClientOptions, 'signTransaction' | 'signAuthEntry'>,
+    player2Signer: Pick<contract.ClientOptions, 'signTransaction' | 'signAuthEntry'>,
+    authTtlMinutes?: number
+  ): Promise<{ result: void; txHash: string | null }> {
+    const buildClient = new TheResistanceClient({
+      contractId: this.contractId,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      rpcUrl: RPC_URL,
+      allowHttp: ALLOW_HTTP,
+      publicKey: player2,
+    });
+
+    const tx = await buildClient.start_game(
+      {
+        session_id: sessionId,
+        player1,
+        player2,
+        player1_points: player1Points,
+        player2_points: player2Points,
+        player1_commitment: player1Commitment,
+        player2_commitment: player2Commitment,
+      },
+      DEFAULT_METHOD_OPTIONS
+    );
+
+    const authEntries = tx.simulationData?.result?.auth;
+    if (!authEntries?.length) {
+      throw new Error('No auth entries found in start_game simulation');
+    }
+
+    let player1AuthEntry: (typeof authEntries)[number] | null = null;
+    for (const entry of authEntries) {
+      try {
+        const entryAddress = entry.credentials().address().address();
+        const entryAddressString = Address.fromScAddress(entryAddress).toString();
+        if (entryAddressString === player1) {
+          player1AuthEntry = entry;
+          break;
+        }
+      } catch {
+        // Skip non-address credential entries.
+      }
+    }
+
+    if (!player1AuthEntry) {
+      throw new Error(`No auth entry found for Player 1 (${player1})`);
+    }
+
+    if (!player1Signer.signAuthEntry) {
+      throw new Error('Player 1 signer does not support auth entry signing');
+    }
+    const signPlayer1AuthEntry = player1Signer.signAuthEntry;
+
+    const authValidUntilLedgerSeq = authTtlMinutes
+      ? await calculateValidUntilLedger(RPC_URL, authTtlMinutes)
+      : await calculateValidUntilLedger(RPC_URL, MULTI_SIG_AUTH_TTL_MINUTES);
+
+    const player1SignedAuthEntry = await authorizeEntry(
+      player1AuthEntry,
+      async (preimage) => {
+        const signResult = await signPlayer1AuthEntry(preimage.toXDR('base64'), {
+          networkPassphrase: NETWORK_PASSPHRASE,
+          address: player1,
+        });
+
+        if (signResult.error) {
+          throw new Error(`Player 1 auth signing failed: ${signResult.error.message}`);
+        }
+
+        return Buffer.from(signResult.signedAuthEntry, 'base64');
+      },
+      authValidUntilLedgerSeq,
+      NETWORK_PASSPHRASE
+    );
+
+    const txWithInjectedAuth = await injectSignedAuthEntry(
+      tx,
+      player1SignedAuthEntry.toXDR('base64'),
+      player2,
+      player2Signer,
+      authValidUntilLedgerSeq
+    );
+
+    const player2Client = this.createSigningClient(player2, player2Signer);
+    const player2Tx = player2Client.txFromXDR(txWithInjectedAuth.toXDR());
+    const needsSigning = await player2Tx.needsNonInvokerSigningBy();
+
+    if (needsSigning.includes(player2)) {
+      await player2Tx.signAuthEntries({ expiration: authValidUntilLedgerSeq });
+    }
+
+    await player2Tx.simulate();
+
+    const finalValidUntilLedgerSeq = await calculateValidUntilLedger(
+      RPC_URL,
+      DEFAULT_AUTH_TTL_MINUTES
+    );
+
+    const sentTx = await signAndSendViaLaunchtube(
+      player2Tx,
+      DEFAULT_METHOD_OPTIONS.timeoutInSeconds,
+      finalValidUntilLedgerSeq
+    );
+    const txResponse = sentTx.getTransactionResponse as
+      | { hash?: string; id?: string; txHash?: string }
+      | undefined;
+    const txHash = txResponse?.hash || txResponse?.id || txResponse?.txHash || null;
+    return { result: sentTx.result, txHash };
+  }
+
+  /**
    * Execute an action against opponent's bases with ZK proof
    *
    * Action types:
@@ -131,6 +268,9 @@ export class TheResistanceService {
     const proofBuffer = Buffer.from(proofBytes);
 
     console.log('[executeAction] Calling contract:', {
+      rpcUrl: RPC_URL,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      contractId: this.contractId,
       sessionId,
       actionType,
       targetId,

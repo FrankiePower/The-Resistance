@@ -161,9 +161,9 @@ export async function generateActionProof(inputs: ActionProofInputs): Promise<Ac
       ? parseInt(returnValue, 16)
       : Number(returnValue);
 
-    // Generate proof
-    console.log('[ZK] Generating proof...');
-    const proof = await backendInstance!.generateProof(witness);
+    // Must use keccak mode to match on-chain UltraHonk verifier transcript.
+    console.log('[ZK] Generating proof (keccak mode)...');
+    const proof = await backendInstance!.generateProof(witness, { keccak: true });
     console.log('[ZK] Proof generated, size:', proof.proof.length);
 
     return {
@@ -185,7 +185,7 @@ export async function verifyProof(proof: Uint8Array): Promise<boolean> {
   }
 
   try {
-    const isValid = await backendInstance!.verifyProof({ proof, publicInputs: [] });
+    const isValid = await backendInstance!.verifyProof({ proof, publicInputs: [] }, { keccak: true });
     console.log('[ZK] Proof verification:', isValid ? 'VALID' : 'INVALID');
     return isValid;
   } catch (err) {

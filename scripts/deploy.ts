@@ -9,6 +9,7 @@
 
 import { $ } from "bun";
 import { existsSync } from "node:fs";
+import { statSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -303,7 +304,22 @@ for (const contract of contracts) {
     let deployResult: string;
     if (contract.packageName === "the-resistance") {
       // the-resistance requires vk_bytes for ZK verification
-      const vkPath = "circuits/target/vk";
+      const vkBasePath = "circuits/target/vk";
+      const vkPath = (() => {
+        if (!existsSync(vkBasePath)) {
+          throw new Error(`Missing verification key path: ${vkBasePath}`);
+        }
+        const stats = statSync(vkBasePath);
+        // New bb.js/nargo layouts write VK to circuits/target/vk/vk.
+        if (stats.isDirectory()) {
+          const nested = `${vkBasePath}/vk`;
+          if (!existsSync(nested)) {
+            throw new Error(`Missing verification key file: ${nested}`);
+          }
+          return nested;
+        }
+        return vkBasePath;
+      })();
       deployResult =
         await $`stellar contract deploy --wasm-hash ${wasmHash} --source-account ${adminSecret} --network ${NETWORK} -- --admin ${adminAddress} --game_hub ${mockGameHubId} --vk_bytes-file-path ${vkPath}`.text();
     } else {

@@ -3,6 +3,14 @@
  */
 
 import { contract } from '@stellar/stellar-sdk';
+import { RPC_URL } from './constants';
+
+function getExplorerTxUrl(txHash: string): string | null {
+  const rpc = RPC_URL.toLowerCase();
+  if (rpc.includes('localhost') || rpc.includes('127.0.0.1')) return null;
+  if (rpc.includes('testnet')) return `https://stellar.expert/explorer/testnet/tx/${txHash}`;
+  return `https://stellar.expert/explorer/public/tx/${txHash}`;
+}
 
 /**
  * Sign and send a transaction via Launchtube
@@ -20,7 +28,19 @@ export async function signAndSendViaLaunchtube(
   if (typeof tx !== 'string' && 'simulate' in tx) {
     const simulated = await tx.simulate();
     try {
-      return await simulated.signAndSend();
+      const sent = await simulated.signAndSend();
+      const txResponse = sent.getTransactionResponse as any;
+      const txHash = txResponse?.hash || txResponse?.id || txResponse?.txHash;
+      if (txHash) {
+        console.log('[TX] Submitted:', txHash);
+        const url = getExplorerTxUrl(txHash);
+        if (url) {
+          console.log('[TX] Explorer:', url);
+        } else {
+          console.log('[TX] Local network tx hash:', txHash);
+        }
+      }
+      return sent;
     } catch (err: any) {
       const errName = err?.name ?? '';
       const errMessage = err instanceof Error ? err.message : String(err);
@@ -35,7 +55,19 @@ export async function signAndSendViaLaunchtube(
       // In those cases, the SDK requires `force: true` to sign and send anyway.
       if (isNoSignatureNeeded) {
         try {
-          return await simulated.signAndSend({ force: true });
+          const sent = await simulated.signAndSend({ force: true });
+          const txResponse = sent.getTransactionResponse as any;
+          const txHash = txResponse?.hash || txResponse?.id || txResponse?.txHash;
+          if (txHash) {
+            console.log('[TX] Submitted (force):', txHash);
+            const url = getExplorerTxUrl(txHash);
+            if (url) {
+              console.log('[TX] Explorer:', url);
+            } else {
+              console.log('[TX] Local network tx hash:', txHash);
+            }
+          }
+          return sent;
         } catch (forceErr: any) {
           const forceName = forceErr?.name ?? '';
           const forceMessage = forceErr instanceof Error ? forceErr.message : String(forceErr);
