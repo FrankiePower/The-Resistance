@@ -1,84 +1,110 @@
-// THE RESISTANCE: Base Check Circuit (Perk Edition)
-// Proves the result of various weapon/scanner actions against secret bases.
+// THE RESISTANCE: 3D Galactic War Circuit
+// Proves the result of weapon/scanner actions against secret bases using star IDs.
+//
+// Game Setup:
+// - 200 stars total (IDs: 0-199)
+// - 10 arms of 20 stars each (Arm 0 = stars 0-19, Arm 1 = stars 20-39, etc.)
+// - Each player hides 10 bases among the 200 stars
+//
+// Actions:
+// - Solar Scan (0): Precision strike on a single star
+// - Deep Radar (1): Scan a region, count bases within neighbor radius
+// - Arm Strike (2): Devastate an entire arm, destroy all bases in that arm
 
 use poseidon::poseidon2::Poseidon2;
 
-// Helper to check if a value is -1, 0, or 1 (i.e. distance <= 1)
-// We check if d^3 - d == 0  which is true for 0, 1, -1
-fn is_within_one(d: Field) -> bool {
-    let d2 = d * d;
-    let d3 = d2 * d;
-    d3 == d
+// Maximum neighbors for Deep Radar scan (adjustable based on radius)
+global MAX_NEIGHBORS: u32 = 20;
+
+// Stars per arm for Arm Strike calculation
+global STARS_PER_ARM: u32 = 20;
+
+// Helper: Convert u32 array to Field array for hashing
+fn bases_to_fields(bases: [u32; 10]) -> [Field; 10] {
+    let mut fields: [Field; 10] = [0; 10];
+    for i in 0..10 {
+        fields[i] = bases[i] as Field;
+    }
+    fields
 }
 
 fn main(
-    // PRIVATE - your secret base locations
-    // We separate X and Y coordinates to make area calculations easier
-    bases_x: [Field; 10],
-    bases_y: [Field; 10],
+    // PRIVATE - your 10 secret base star IDs (0-199)
+    bases: [u32; 10],
 
-    // PUBLIC - on-chain values
+    // PUBLIC - commitment hash of your bases
     bases_hash: pub Field,
-    
-    // ACTION TYPE
-    // 0 = Basic Shot (Single Target)
-    // 1 = Radar Sweep (3x3 Area, reveals COUNT of bases, not exact location)
-    // 2 = Orbital Column Strike (Hits an entire X column)
-    action_type: pub Field,
-    
-    // PUBLIC - Coordinates being targeted
-    target_x: pub Field,
-    target_y: pub Field,
-) -> pub Field {
 
-    // 1. Verify commitment matches
-    // We pack the x and y coordinates into a single array for hashing
-    // For a real implementation, you might want to hash them in pairs or sequentially
-    // But for this example, we'll hash the 20 elements. Poseidon2 usually takes 
-    // a fixed size, let's hash x's then y's. (Assuming Poseidon2::hash can take 20 inputs
-    // or we hash them in chunks if needed. We'll use a simplified version here.)
-    // Note: If Poseidon2 doesn't support 20 inputs directly, we would need to chain hashes.
-    // Assuming Poseidon2::hash supports up to 16, we might need a workaround.
-    // Let's use two hashes and hash the results.
-    let hash_x = Poseidon2::hash(bases_x, 10);
-    let hash_y = Poseidon2::hash(bases_y, 10);
-    // You could hash these two together, but let's assume the bases_hash we receive 
-    // is Poseidon2::hash([hash_x, hash_y])
-    let computed_hash = Poseidon2::hash([hash_x, hash_y], 2);
-    
-    assert(computed_hash == bases_hash, "Base commitment mismatch");
+    // PUBLIC - action type
+    // 0 = Solar Scan (single star precision strike)
+    // 1 = Deep Radar (count bases in neighbor radius)
+    // 2 = Arm Strike (destroy entire spiral arm)
+    action_type: pub u32,
 
-    // Ensure action_type is valid (0, 1, or 2)
-    assert((action_type == 0) | (action_type == 1) | (action_type == 2), "Invalid action type");
+    // PUBLIC - target star ID (0-199)
+    target_id: pub u32,
 
-    let mut result: Field = 0;
+    // PUBLIC - neighbor star IDs for Deep Radar (unused for other actions)
+    // These are precomputed by the frontend based on 3D positions
+    neighbors: pub [u32; MAX_NEIGHBORS],
+    neighbor_count: pub u32,
+) -> pub u32 {
+
+    // ===========================================
+    // 1. VERIFY BASE COMMITMENT
+    // ===========================================
+    // Convert bases to Field array for hashing
+    let bases_fields = bases_to_fields(bases);
+    let computed_hash = Poseidon2::hash(bases_fields, 10);
+    assert(computed_hash == bases_hash, "Base commitment mismatch - cheating detected!");
+
+    // ===========================================
+    // 2. VALIDATE INPUTS
+    // ===========================================
+    assert(
+        (action_type == 0) | (action_type == 1) | (action_type == 2),
+        "Invalid action type"
+    );
+
+    // Validate target_id is in valid range (0-199)
+    assert(target_id < 200, "Target star ID out of range");
+
+    // ===========================================
+    // 3. EXECUTE ACTION & COUNT HITS
+    // ===========================================
+    let mut result: u32 = 0;
+
+    // Calculate target's arm index for Arm Strike (integer division)
+    let target_arm = target_id / STARS_PER_ARM;
 
     for i in 0..10 {
-        let x = bases_x[i];
-        let y = bases_y[i];
-        
-        let dx = x - target_x;
-        let dy = y - target_y;
+        let base_id = bases[i];
+        let mut hit: u32 = 0;
 
-        let mut hit: Field = 0;
-
-        // [ACTION 0] Basic Shot: Exact match required
+        // [ACTION 0] SOLAR SCAN: Exact star match
         if action_type == 0 {
-            if (dx == 0) & (dy == 0) {
+            if base_id == target_id {
                 hit = 1;
             }
         }
 
-        // [ACTION 1] Radar Sweep: Distance <= 1 in both x and y (3x3 grid)
+        // [ACTION 1] DEEP RADAR: Check if base is in neighbor list
         if action_type == 1 {
-            if is_within_one(dx) & is_within_one(dy) {
-                hit = 1;
+            // Loop through the neighbor list to check membership
+            for j in 0..MAX_NEIGHBORS {
+                // Only check up to neighbor_count valid entries
+                if j < neighbor_count {
+                    if base_id == neighbors[j] {
+                        hit = 1;
+                    }
+                }
             }
         }
 
-        // [ACTION 2] Orbital Column Strike: X matches, Y doesn't matter
+        // [ACTION 2] ARM STRIKE: Same arm = hit (integer division)
         if action_type == 2 {
-            if dx == 0 {
+            let base_arm = base_id / STARS_PER_ARM;
+            if base_arm == target_arm {
                 hit = 1;
             }
         }
@@ -89,59 +115,175 @@ fn main(
     result
 }
 
+// ===========================================
+// HELPER: Compute hash for tests
+// ===========================================
+fn compute_test_hash(bases: [u32; 10]) -> Field {
+    let bases_fields = bases_to_fields(bases);
+    Poseidon2::hash(bases_fields, 10)
+}
+
+// ===========================================
+// TESTS
+// ===========================================
+
 #[test]
-fn test_basic_shot_hit() {
-    let mut bases_x = [0; 10];
-    let mut bases_y = [0; 10];
-    bases_x[0] = 5; bases_y[0] = 5; // Base at (5,5)
+fn test_solar_scan_hit() {
+    // Setup: Base at star 42
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 42;
 
-    let hash_x = Poseidon2::hash(bases_x, 10);
-    let hash_y = Poseidon2::hash(bases_y, 10);
-    let bases_hash = Poseidon2::hash([hash_x, hash_y], 2);
+    let bases_hash = compute_test_hash(bases);
+    let neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
 
-    let result = main(bases_x, bases_y, bases_hash, 0, 5, 5);
+    // Scan star 42 - should hit
+    let result = main(bases, bases_hash, 0, 42, neighbors, 0);
     assert(result == 1);
 }
 
 #[test]
-fn test_radar_sweep_detects_multiple() {
-    let mut bases_x = [0; 10];
-    let mut bases_y = [0; 10];
-    // Place 3 bases in a 3x3 area around (5,5)
-    bases_x[0] = 4; bases_y[0] = 4; // Top Left
-    bases_x[1] = 5; bases_y[1] = 5; // Center
-    bases_x[2] = 6; bases_y[2] = 6; // Bottom Right
-    
-    // Place one far away
-    bases_x[3] = 9; bases_y[3] = 9;
+fn test_solar_scan_miss() {
+    // Setup: Base at star 42
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 42;
 
-    let hash_x = Poseidon2::hash(bases_x, 10);
-    let hash_y = Poseidon2::hash(bases_y, 10);
-    let bases_hash = Poseidon2::hash([hash_x, hash_y], 2);
+    let bases_hash = compute_test_hash(bases);
+    let neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
 
-    // Radar at (5,5) should detect exactly 3 bases
-    let result = main(bases_x, bases_y, bases_hash, 1, 5, 5);
+    // Scan star 43 - should miss
+    let result = main(bases, bases_hash, 0, 43, neighbors, 0);
+    assert(result == 0);
+}
+
+#[test]
+fn test_deep_radar_finds_multiple() {
+    // Setup: Bases at stars 10, 15, 42, 100
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 10;
+    bases[1] = 15;
+    bases[2] = 42;
+    bases[3] = 100;
+
+    let bases_hash = compute_test_hash(bases);
+
+    // Neighbors of star 12 include stars 10, 11, 13, 14, 15 (within radius)
+    let mut neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
+    neighbors[0] = 10;
+    neighbors[1] = 11;
+    neighbors[2] = 13;
+    neighbors[3] = 14;
+    neighbors[4] = 15;
+    let neighbor_count: u32 = 5;
+
+    // Radar scan should find 2 bases (10 and 15)
+    let result = main(bases, bases_hash, 1, 12, neighbors, neighbor_count);
+    assert(result == 2);
+}
+
+#[test]
+fn test_deep_radar_finds_none() {
+    // Setup: Bases at stars 100, 150
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 100;
+    bases[1] = 150;
+
+    let bases_hash = compute_test_hash(bases);
+
+    // Neighbors of star 12 (stars 10-15) - no bases here
+    let mut neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
+    neighbors[0] = 10;
+    neighbors[1] = 11;
+    neighbors[2] = 13;
+    neighbors[3] = 14;
+    neighbors[4] = 15;
+    let neighbor_count: u32 = 5;
+
+    // Radar scan should find 0 bases
+    let result = main(bases, bases_hash, 1, 12, neighbors, neighbor_count);
+    assert(result == 0);
+}
+
+#[test]
+fn test_arm_strike_destroys_multiple() {
+    // Setup:
+    // - Arm 3 = stars 60-79
+    // - Bases at stars 65, 72, 78 (all in Arm 3) + star 100 (Arm 5)
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 65;  // Arm 3 (65/20 = 3)
+    bases[1] = 72;  // Arm 3 (72/20 = 3)
+    bases[2] = 78;  // Arm 3 (78/20 = 3)
+    bases[3] = 100; // Arm 5 (100/20 = 5)
+
+    let bases_hash = compute_test_hash(bases);
+    let neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
+
+    // Strike star 70 (Arm 3) - should destroy 3 bases
+    let result = main(bases, bases_hash, 2, 70, neighbors, 0);
     assert(result == 3);
 }
 
 #[test]
-fn test_orbital_strike() {
-    let mut bases_x = [0; 10];
-    let mut bases_y = [0; 10];
-    // Place 4 bases in column X=3
-    bases_x[0] = 3; bases_y[0] = 1;
-    bases_x[1] = 3; bases_y[1] = 5;
-    bases_x[2] = 3; bases_y[2] = 9;
-    bases_x[3] = 3; bases_y[3] = 2;
-    
-    // Place others elsewhere
-    bases_x[4] = 4; bases_y[4] = 4;
+fn test_arm_strike_misses() {
+    // Setup: Bases at stars 10, 25 (Arms 0 and 1)
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 10;  // Arm 0 (10/20 = 0)
+    bases[1] = 25;  // Arm 1 (25/20 = 1)
 
-    let hash_x = Poseidon2::hash(bases_x, 10);
-    let hash_y = Poseidon2::hash(bases_y, 10);
-    let bases_hash = Poseidon2::hash([hash_x, hash_y], 2);
+    let bases_hash = compute_test_hash(bases);
+    let neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
 
-    // Strike column 3 should destroy 4 bases
-    let result = main(bases_x, bases_y, bases_hash, 2, 3, 0); // Y doesn't matter
-    assert(result == 4);
+    // Strike star 150 (Arm 7) - should destroy 0 bases
+    let result = main(bases, bases_hash, 2, 150, neighbors, 0);
+    assert(result == 0);
+}
+
+#[test]
+fn test_arm_boundaries() {
+    // Verify arm calculation: star 19 = Arm 0, star 20 = Arm 1
+    // Place bases in different arms so we can test boundary correctly
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 19;   // Arm 0 (19/20 = 0)
+    bases[1] = 20;   // Arm 1 (20/20 = 1)
+    bases[2] = 60;   // Arm 3
+    bases[3] = 80;   // Arm 4
+    bases[4] = 100;  // Arm 5
+    bases[5] = 120;  // Arm 6
+    bases[6] = 140;  // Arm 7
+    bases[7] = 160;  // Arm 8
+    bases[8] = 180;  // Arm 9
+    bases[9] = 199;  // Arm 9
+
+    let bases_hash = compute_test_hash(bases);
+    let neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
+
+    // Strike Arm 0 (target star 5) - should only hit star 19
+    let result = main(bases, bases_hash, 2, 5, neighbors, 0);
+    assert(result == 1);
+
+    // Strike Arm 1 (target star 25) - should only hit star 20
+    let result2 = main(bases, bases_hash, 2, 25, neighbors, 0);
+    assert(result2 == 1);
+}
+
+#[test]
+fn test_all_bases_in_one_arm() {
+    // Edge case: All 10 bases in same arm (Arm 2 = stars 40-59)
+    let mut bases: [u32; 10] = [0; 10];
+    bases[0] = 40;
+    bases[1] = 41;
+    bases[2] = 42;
+    bases[3] = 43;
+    bases[4] = 44;
+    bases[5] = 45;
+    bases[6] = 46;
+    bases[7] = 47;
+    bases[8] = 48;
+    bases[9] = 49;
+
+    let bases_hash = compute_test_hash(bases);
+    let neighbors: [u32; MAX_NEIGHBORS] = [0; MAX_NEIGHBORS];
+
+    // Strike Arm 2 (stars 40-59) - should destroy all 10
+    let result = main(bases, bases_hash, 2, 45, neighbors, 0);
+    assert(result == 10);
 }

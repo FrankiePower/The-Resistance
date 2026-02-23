@@ -1,6 +1,18 @@
-# Private inputs (secret bases)
-bases = ["10", "25", "50", "100", "150", "200", "250", "300", "350", "400"]
+# THE RESISTANCE - Circuit Inputs
+# Testing Solar Scan on star 42 (where we have a base)
 
-# Public inputs
-bases_hash = "0x209cac26c87ff37391b96dea27ad5769651116a49e49ad9a3bcca2cde55b1673"
-target_star = "50"
+# Private: Your 10 secret base star IDs
+bases = [42, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+# Public: Poseidon2 hash of bases (computed by compute_hash.mjs)
+bases_hash = "0x148b22a6b306c4a9c436cde5b75e9821fb37b960682706f729ce276e69f20517"
+
+# Action: 0 = Solar Scan
+action_type = 0
+
+# Target: Star 42 (should HIT!)
+target_id = 42
+
+# Neighbors (unused for Solar Scan)
+neighbors = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+neighbor_count = 0
