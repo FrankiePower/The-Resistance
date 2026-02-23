@@ -10,27 +10,40 @@ export default defineConfig({
     global: 'globalThis'
   },
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      buffer: path.resolve(__dirname, './node_modules/buffer/')
-    },
+    alias: [
+      { find: /^@\//, replacement: `${path.resolve(__dirname, './src')}/` },
+      { find: 'buffer', replacement: path.resolve(__dirname, './node_modules/buffer/') },
+      { find: /^pino$/, replacement: path.resolve(__dirname, './src/shims/pino.ts') }
+    ],
     dedupe: ['@stellar/stellar-sdk']
   },
   optimizeDeps: {
     include: ['@stellar/stellar-sdk', '@stellar/stellar-sdk/contract', '@stellar/stellar-sdk/rpc', 'buffer'],
+    exclude: ['@noir-lang/noir_js', '@noir-lang/acvm_js', '@noir-lang/noirc_abi', '@aztec/bb.js'],
     esbuildOptions: {
       define: {
         global: 'globalThis'
-      }
+      },
+      target: 'esnext'
     }
   },
   build: {
     commonjsOptions: {
       transformMixedEsModules: true
-    }
+    },
+    target: 'esnext'
   },
   server: {
     port: 3000,
-    open: true
-  }
+    open: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
+  },
+  worker: {
+    format: 'es',
+    plugins: () => []
+  },
+  assetsInclude: ['**/*.wasm']
 })
